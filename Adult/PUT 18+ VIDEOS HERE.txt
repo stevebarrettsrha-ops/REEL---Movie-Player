@@ -1,0 +1,19 @@
+================================================================
+ Adult  —  explicit (18+) content   [PASSWORD PROTECTED]
+================================================================
+Drop video files here and they are LOCKED:
+
+  * They are HIDDEN from every profile by default.
+  * They are NEVER shown or streamed to a KIDS profile.
+  * On a normal profile, tap "18+" in the top bar (or "Adult (18+)"
+    in the menu) and enter the password to unlock them for that
+    sitting. The unlock lasts until you switch profile / reload.
+
+  Default password:  3119
+
+  To use a different password, set the ADULT_PIN environment
+  variable BEFORE the first run, e.g.  ADULT_PIN=2580 node server.js
+  (To change it later: stop the server, open data/profiles.json,
+   delete the "adultPinHash" line, then start with ADULT_PIN set.)
+
+Same naming rules as the movies folder:  Title (Year).mp4

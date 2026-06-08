@@ -298,6 +298,16 @@
   .pm-name{font-weight:700;font-size:15px}.pm-sub{font-size:12px;color:var(--muted)}
   .pm-item{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:var(--ink);font:inherit;font-size:14px;font-weight:600;text-align:left;padding:11px 10px;border-radius:8px;cursor:pointer}
   .pm-item:hover{background:rgba(255,255,255,.07)}.pm-item svg{width:19px;height:19px;fill:currentColor}
+  /* ---------- TV / D-PAD REMOTE FOCUS ---------- */
+  /* Only shown once remote/arrow navigation is active, so mouse users see nothing. */
+  body.tvnav :focus{outline:none}
+  body.tvnav .tile:focus,body.tvnav .pcard:focus,body.tvnav .genre:focus,body.tvnav .ep:focus,
+  body.tvnav .epitem:focus,body.tvnav button:focus,body.tvnav a:focus,body.tvnav input:focus,
+  body.tvnav .hero-dots i:focus,body.tvnav [tabindex]:focus{
+    outline:3px solid var(--accent);outline-offset:3px;border-radius:10px;
+    box-shadow:0 0 0 6px rgba(54,163,247,.28);position:relative;z-index:2;
+  }
+  body.tvnav .tile:focus,body.tvnav .pcard:focus,body.tvnav .genre:focus{transform:scale(1.04);transition:transform .12s}
 </style>
 </head>
 <body>
@@ -360,6 +370,15 @@
     <div class="add-actions"><button class="add-cancel" id="adminCancel">Cancel</button><button class="add-save" id="adminOk">Sign in</button></div>
   </div>
 </div>
+<div class="add-form" id="adultForm">
+  <div class="add-card">
+    <h3>Adult content (18+)</h3>
+    <div class="add-hint" style="margin-bottom:10px">Enter the password to unlock explicit titles for this session.</div>
+    <input id="adultPin" placeholder="Password" maxlength="8" inputmode="numeric" type="password" style="text-align:center;letter-spacing:.4em">
+    <div class="add-hint" id="adultErr" style="color:#e50914;display:none">Wrong password</div>
+    <div class="add-actions"><button class="add-cancel" id="adultCancel">Cancel</button><button class="add-save" id="adultOk">Unlock</button></div>
+  </div>
+</div>
 <div class="add-form" id="aeForm">
   <div class="add-card">
     <h3 id="aeTitle">Edit profile</h3>
@@ -380,12 +399,14 @@
       <button class="navmenu-item" id="mMovies">Movies</button>
       <button class="navmenu-item" id="mSeries">TV shows</button>
       <button class="navmenu-item" id="mCats">Categories</button>
+      <button class="navmenu-item" id="mAdult" title="Adult content" style="display:none">A</button>
     </div>
   </div>
   <button class="link active hidesm" id="navHome">Home</button>
   <button class="link hidesm" id="navMovies">Movies</button>
   <button class="link hidesm" id="navSeries">TV shows</button>
   <button class="link hidesm" id="navCats">Categories</button>
+  <button class="link hidesm" id="navAdult" title="Adult content" style="display:none">A</button>
   <div class="grow"></div>
   <label class="search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 10-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg><input id="searchInput" placeholder="Search"></label>
   <div class="lang-wrap hidesm">
@@ -585,6 +606,9 @@ const store={
 
 /* 3) STATE + helpers ------------------------------------------------------- */
 const $=s=>document.querySelector(s);
+// Escape anything derived from filenames / sidecar JSON / profile names before it goes
+// into innerHTML, so a title like  <img src=x onerror=...>.mp4  can't run script.
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* --- interface language (translates the UI chrome; titles/descriptions come
        from your files/TMDB and stay as provided). Add a language by adding a
@@ -648,6 +672,7 @@ const grad=c=>{const g=(c&&c.grad)||["#2a2f3a","#1a1d24","#23262e"];return `radi
 const art=c=>c&&c.backdrop?`url('${c.backdrop}') center/cover no-repeat, ${grad(c)}`:grad(c);
 const epArt=(e,series)=>e&&e.still?`url('${e.still}') center/cover no-repeat, ${grad(series)}`:art(series);
 let KIDS=false;                                                                  // set when a kids profile is active
+let ADULT_UNLOCKED=false;                                                         // set after the adult password is entered this session
 const KID_RATINGS=["G","PG","TV-Y","TV-Y7","TV-G","TV-PG","NR"];
 const isKid=c=>KID_RATINGS.includes((c.rating||"NR").toUpperCase());
 const vis=()=>KIDS?CATALOG.filter(isKid):CATALOG;                                 // catalog the current profile may see
@@ -739,9 +764,9 @@ function tile(c){
   const r=resume(c);
   const el=document.createElement("div");el.className="tile";el.dataset.id=c.id;
   el.innerHTML=`<div class="tile-art" style="background:${art(c)}">
-      ${c.badge?`<div class="tag">${c.badge}</div>`:""}${c.type==="series"?'<div class="typ">SERIES</div>':""}
+      ${c.badge?`<div class="tag">${esc(c.badge)}</div>`:""}${c.type==="series"?'<div class="typ">SERIES</div>':""}
       <div class="corner"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-      <div class="name">${c.title}</div></div>
+      <div class="name">${esc(c.title)}</div></div>
     <div class="tile-bar"><i style="width:${r.pct}%"></i></div>
     <div class="tile-info"><span class="t">${c.year}</span>
       <span class="m">${c.type==="series"
@@ -775,6 +800,7 @@ function renderRows(){
   add(t("Sci-Fi & Fantasy"),C.filter(c=>c.genres.some(g=>["Science fiction","Fantasy","Action and adventure"].includes(g))));
   add(t("Kids & Family"),C.filter(c=>c.genres.some(g=>["Kids","Comedy"].includes(g))));
   add(t("Drama"),C.filter(c=>c.genres.includes("Drama")));
+  if(ADULT_UNLOCKED) add("Adult (18+)",C.filter(c=>c.adult||c.category==="Adult"));
 }
 
 /* 7) HOVER PREVIEW CARD ---------------------------------------------------- */
@@ -789,7 +815,7 @@ function openPreview(c,el){
   pvVid.play().then(()=>pvVid.classList.add("on")).catch(()=>{});
   $("#pvList").classList.toggle("on",inList(c.id));
   $("#pvAccolade").style.display=c.accolade?"flex":"none";if(c.accolade)$("#pvAccolade").querySelector("span").textContent=c.accolade;
-  $("#pvMeta").innerHTML=`<span class="chip">${c.rating}</span><span class="cc">CC</span><span>${c.year}</span><span class="dot"></span><span>${c.runtime}</span>`;
+  $("#pvMeta").innerHTML=`<span class="chip">${esc(c.rating)}</span><span class="cc">CC</span><span>${esc(c.year)}</span><span class="dot"></span><span>${esc(c.runtime)}</span>`;
   $("#pvGenres").innerHTML=`<b>Genres:</b> ${c.genres.join(", ")}`;
   // position: centered on tile, clamped to viewport
   const w=360,cx=r.left+r.width/2;let left=cx-w/2;left=Math.max(12,Math.min(left,window.innerWidth-w-12));
@@ -810,7 +836,7 @@ function openDetail(c){
   detailC=c;hideAllViews();preview.classList.remove("show");
   $("#dHero").style.background=art(c);$("#dTitle").textContent=c.title;$("#dScore").textContent=c.score+"% match";
   $("#dYear").textContent=c.year;$("#dRating").textContent=c.rating;$("#dRuntime").textContent=c.runtime;
-  $("#dDesc").textContent=c.desc;$("#dCast").innerHTML="<b>"+t("Cast")+":</b> "+c.cast+" &nbsp;·&nbsp; <b>"+t("License")+":</b> "+c.license;
+  $("#dDesc").textContent=c.desc;$("#dCast").innerHTML="<b>"+t("Cast")+":</b> "+esc(c.cast)+" &nbsp;·&nbsp; <b>"+t("License")+":</b> "+esc(c.license);
   const rz=resume(c);
   $("#dPlayLabel").textContent=c.type==="series"?(rz.started&&rz.ep?t("Resume")+" "+epTag(eps(c).find(e=>e.id===rz.ep.id)||rz.ep):t("Play")+" "+(eps(c)[0]?epTag(eps(c)[0]):"")):(rz.started?t("Resume"):t("Play"));
   $("#dList").classList.toggle("on",inList(c.id));
@@ -822,13 +848,14 @@ function openDetail(c){
       head.textContent=multi?(season.name||("Season "+season.n)):t("Episodes");epWrap.appendChild(head);
       season.episodes.forEach(eRaw=>{const e=Object.assign({_season:season.n},eRaw);
         const s=store.get(pkey(c,e));const pct=s&&s.dur?s.time/s.dur*100:0;const row=document.createElement("div");row.className="ep";
-        row.innerHTML=`<div class="ep-n">${e.epLabel||e.ep}</div><div class="ep-thumb" style="background:${epArt(e,c)}"><div class="pf"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="ebar" style="width:${pct}%"></div></div><div class="ep-meta"><div class="et"><span style="color:var(--ink)">${e.title}</span><span>${e.runtime}</span></div><div class="ed">${e.desc}</div></div>`;
+        row.innerHTML=`<div class="ep-n">${e.epLabel||e.ep}</div><div class="ep-thumb" style="background:${epArt(e,c)}"><div class="pf"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="ebar" style="width:${pct}%"></div></div><div class="ep-meta"><div class="et"><span style="color:var(--ink)">${esc(e.title)}</span><span>${esc(e.runtime)}</span></div><div class="ed">${esc(e.desc)}</div></div>`;
         row.onclick=()=>{closeDetail();openPlayer(c,e);};epWrap.appendChild(row);});
     });
   }
   const more=$("#dMore");more.innerHTML="";
   vis().filter(x=>x.id!==c.id&&x.genres.some(g=>c.genres.includes(g))).concat(vis().filter(x=>x.id!==c.id)).filter((v,i,a)=>a.indexOf(v)===i).slice(0,6).forEach(x=>more.appendChild(tile(x)));
   $("#detail").classList.add("open");document.body.style.overflow="hidden";clearInterval(heroTimer);
+  if(window.TVNAV&&TVNAV.armed)setTimeout(()=>TVNAV.focusFirst($("#detail")),60);
 }
 function closeDetail(){$("#detail").classList.remove("open");document.body.style.overflow="";resetHeroTimer();}
 $("#dClose").onclick=closeDetail;$("#detail").addEventListener("click",e=>{if(e.target===$("#detail"))closeDetail();});
@@ -843,7 +870,7 @@ function openPlayer(c,ep){
   video.muted=false; if(!video.volume) video.volume=1; $("#vol").value=video.volume; updMute();   // make sure sound is on
   if(c.type==="series")store.set("last:"+c.id,ep.id);
   $("#epBtn").classList.toggle("hide",c.type!=="series");
-  $("#pTitle").textContent=c.title;$("#pMeta").textContent=c.type==="series"?`S1:E${ep.ep} · ${ep.title}`:`${c.year} · ${c.license} · ${c.runtime}`;
+  $("#pTitle").textContent=c.title;$("#pMeta").textContent=c.type==="series"?`${epTag(ep)} · ${ep.title}`:`${c.year} · ${c.license} · ${c.runtime}`;
   player.classList.add("open");document.body.classList.add("player-open");$("#upnext").classList.remove("show");$("#eppanel").classList.remove("open");
   buildEmbed();renderEpList();applyCaptions();
   const s=store.get(pkey(c,ep));
@@ -945,7 +972,7 @@ $("#audioFixBtn").onclick=async()=>{
     } else { btn.disabled=false; btn.textContent="Fix failed — retry"; $("#audioWarnText").textContent=(d.error==="ffmpeg not installed")?"Install ffmpeg on the server PC to auto-fix, or re-encode to AAC in HandBrake.":"Couldn't fix automatically. Re-encode to AAC in HandBrake."; }
   }catch{ btn.disabled=false; btn.textContent="Fix failed — retry"; }
 };
-function closePlayer(){video.pause();player.classList.remove("open");document.body.classList.remove("player-open");saveState();renderRows();if($("#heroSection").style.display!=="none")heroVid.play().catch(()=>{});}
+function closePlayer(){video.pause();player.classList.remove("open");document.body.classList.remove("player-open");if(typeof pCtrl!=="undefined")pCtrl=false;saveState();renderRows();if($("#heroSection").style.display!=="none")heroVid.play().catch(()=>{});if(window.TVNAV&&TVNAV.armed)setTimeout(()=>TVNAV.focusFirst(document.body),60);}
 $("#pBack").onclick=closePlayer;
 let hideT;
 function showUI(){player.classList.add("show-ui");clearTimeout(hideT);hideT=setTimeout(()=>{if(!video.paused&&!$("#menu").classList.contains("open")&&!$("#eppanel").classList.contains("open"))player.classList.remove("show-ui");},2600);}
@@ -1027,7 +1054,7 @@ function renderEpList(){const l=$("#epList");l.innerHTML="";if(current?.type!=="
     if(multi){const h=document.createElement("div");h.className="ep-season";h.textContent=season.name||("Season "+season.n);l.appendChild(h);}
     season.episodes.forEach(eRaw=>{const e=Object.assign({_season:season.n},eRaw);
       const s=store.get(pkey(current,e));const pct=s&&s.dur?s.time/s.dur*100:0;const on=currentEp&&currentEp.id===e.id;const it=document.createElement("div");it.className="epitem"+(on?" on":"");it.tabIndex=0;
-      it.innerHTML=`<div class="et" style="background:${epArt(e,current)}"><div class="eb" style="width:${pct}%"></div></div><div class="ex"><div class="n">${e.epLabel||e.ep}. ${e.title}</div><div class="d">${e.runtime}</div></div>`;
+      it.innerHTML=`<div class="et" style="background:${epArt(e,current)}"><div class="eb" style="width:${pct}%"></div></div><div class="ex"><div class="n">${e.epLabel||e.ep}. ${esc(e.title)}</div><div class="d">${esc(e.runtime)}</div></div>`;
       const go=()=>openPlayer(current,e);it.onclick=go;it.onkeydown=ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();go();}};
       if(on)activeEl=it;l.appendChild(it);});
   });
@@ -1047,12 +1074,39 @@ function fillUpNext(){const n=nextItem();$("#unArt").style.background=(n.ep&&n.e
 video.addEventListener("loadeddata",fillUpNext);
 video.addEventListener("ended",()=>{logEvent("ended");if(saveProgress&&current)store.set(pkey(current,currentEp),{time:video.duration,dur:video.duration});if(autoNext)playNext();});
 let toastT;function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),2600);}
+let pCtrl=false;   // TV controls-focus mode: arrows move between on-screen buttons, OK activates
+function exitCtrl(){ pCtrl=false; const a=document.activeElement; if(a&&a.blur&&player.contains(a))a.blur(); }
+const isBackKey=(k,kc)=> k==="Backspace"||k==="GoBack"||k==="BrowserBack"||kc===461||kc===10009;
 document.addEventListener("keydown",e=>{if(!player.classList.contains("open"))return;
-  if(e.key===" "||e.key==="k"){e.preventDefault();togglePlay();showUI();}else if(e.key==="ArrowLeft"||e.key==="j"){video.currentTime-=10;showUI();}else if(e.key==="ArrowRight"||e.key==="l"){video.currentTime+=10;showUI();}
-  else if(e.key==="ArrowUp"){video.volume=Math.min(1,video.volume+.1);$("#vol").value=video.volume;updMute();showUI();}else if(e.key==="ArrowDown"){video.volume=Math.max(0,video.volume-.1);$("#vol").value=video.volume;updMute();showUI();}
-  else if(e.key==="m")$("#muteBtn").click();else if(e.key==="f")$("#fsBtn").click();
-  else if(e.key==="n"||e.key==="N"){playNext();}else if(e.key==="p"||e.key==="P"){playPrev();}
-  else if(e.key==="Escape"&&!document.fullscreenElement)closePlayer();});
+  const k=e.key, kc=e.keyCode, tv=window.TVNAV;
+  const eppanel=$("#eppanel"), menu=$("#menu");
+  const panel = eppanel.classList.contains("open") ? eppanel : (menu.classList.contains("open") ? menu : null);
+  // ---- episode / settings panel open: navigate inside it with the d-pad ----
+  if(panel){
+    if(k==="Escape"||isBackKey(k,kc)){ e.preventDefault(); panel.classList.remove("open"); showUI(); return; }
+    if(k==="ArrowUp"||k==="ArrowDown"||k==="ArrowLeft"||k==="ArrowRight"){ e.preventDefault(); showUI();
+      if(tv){ tv.arm(); tv.move(panel, k==="ArrowRight"?"right":k==="ArrowLeft"?"left":k==="ArrowDown"?"down":"up"); } return; }
+    if((k==="Enter"||k===" ")&&tv){ tv.activate(document.activeElement,k,e); return; }
+    return;
+  }
+  // ---- TV controls-focus mode: the on-screen control bar has focus ----
+  if(tv && tv.armed && pCtrl){
+    if(k==="Escape"||isBackKey(k,kc)||k==="ArrowDown"){ e.preventDefault(); exitCtrl(); showUI(); return; }
+    if(k==="ArrowLeft"||k==="ArrowRight"||k==="ArrowUp"){ e.preventDefault(); showUI();
+      tv.move($("#player"), k==="ArrowRight"?"right":k==="ArrowLeft"?"left":"up"); return; }
+    if(k==="Enter"||k===" "){ tv.activate(document.activeElement,k,e); showUI(); return; }
+    return;
+  }
+  // ---- video mode (default; desktop shortcuts unchanged) ----
+  if(k===" "||k==="k"||k==="Enter"){e.preventDefault();togglePlay();showUI();}
+  else if(k==="ArrowLeft"||k==="j"){video.currentTime-=10;showUI();}
+  else if(k==="ArrowRight"||k==="l"){video.currentTime+=10;showUI();}
+  else if(k==="ArrowUp"){ if(tv&&tv.armed){ e.preventDefault(); pCtrl=true; tv.arm(); showUI(); tv.focusFirst($("#player")); }
+    else {video.volume=Math.min(1,video.volume+.1);$("#vol").value=video.volume;updMute();showUI();} }
+  else if(k==="ArrowDown"){ if(!(tv&&tv.armed)){video.volume=Math.max(0,video.volume-.1);$("#vol").value=video.volume;updMute();showUI();} }
+  else if(k==="m")$("#muteBtn").click();else if(k==="f")$("#fsBtn").click();
+  else if(k==="n"||k==="N"){playNext();}else if(k==="p"||k==="P"){playPrev();}
+  else if((k==="Escape"||isBackKey(k,kc))&&!document.fullscreenElement)closePlayer();});
 
 /* 10) VIEWS: home / categories / search / filter --------------------------- */
 function hideAllViews(){$("#results").classList.remove("on");$("#catsPage").classList.remove("on");activeFilter=null;}
@@ -1101,7 +1155,28 @@ $("#navCats").onclick=showCategories;
   $("#mMovies").onclick=()=>{ close(); setActive("navMovies"); filterRows(c=>c.type==="movie",t("Movies")); };
   $("#mSeries").onclick=()=>{ close(); setActive("navSeries"); filterRows(c=>c.type==="series",t("TV shows")); };
   $("#mCats").onclick  =()=>{ close(); showCategories(); };
+  $("#mAdult").onclick =()=>{ close(); openAdult(); };
 })();
+
+/* ---- adult (18+) content: hidden by default, unlocked with a password ---- */
+function updateAdultMenu(){ const show=!!PROFILE && !KIDS; const na=$("#navAdult"), ma=$("#mAdult");
+  if(na) na.style.display=show?"":"none"; if(ma) ma.style.display=show?"":"none"; }
+function showAdult(){ setActive("navAdult"); filterRows(c=>c.adult||c.category==="Adult", "Adult (18+)"); }
+function openAdult(){ if(KIDS) return;                       // never for kids profiles
+  if(ADULT_UNLOCKED){ showAdult(); return; }
+  $("#adultPin").value=""; $("#adultErr").style.display="none"; $("#adultForm").classList.add("open"); setTimeout(()=>$("#adultPin").focus(),50); }
+$("#navAdult").onclick=openAdult;
+$("#adultCancel").onclick=()=>$("#adultForm").classList.remove("open");
+$("#adultOk").onclick=async()=>{
+  if(!SERVER_OK){ $("#adultErr").style.display="block"; return; }
+  try{
+    const r=await fetch("/api/adult/unlock?token="+encodeURIComponent(TOKEN),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:$("#adultPin").value})});
+    if(!r.ok){ $("#adultErr").style.display="block"; return; }
+    ADULT_UNLOCKED=true; $("#adultForm").classList.remove("open");
+    await loadCatalog(); renderRows(); showAdult(); toast("Adult content unlocked");
+  }catch{ $("#adultErr").style.display="block"; }
+};
+$("#adultPin").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#adultOk").click(); });
 $("#listShortcut").onclick=e=>{ e.stopPropagation(); $("#profileMenu").classList.toggle("open"); };
 document.addEventListener("click",e=>{ if(!e.target.closest(".avatar-wrap")) $("#profileMenu").classList.remove("open"); });
 $("#pmList").onclick=()=>{ $("#profileMenu").classList.remove("open"); setActive(""); filterRows(c=>inList(c.id),t("My List")); };
@@ -1165,8 +1240,8 @@ function renderGate(){
     const del='<span class="pdel" title="Delete">×</span>';
     const tools = adminMode ? (editIcon + (p.admin?"":del)) : lock;
     const label = p.admin ? '<div class="pkids">ADMIN</div>' : (p.kids ? '<div class="pkids">KIDS</div>' : "");
-    el.innerHTML=`<div class="pav" style="background:${p.color}">${(p.name[0]||"?").toUpperCase()}${tools}</div><div class="pname">${p.name}</div>${label}`;
-    el.querySelector(".pav").onclick=()=>{ if(!adminMode) requestProfile(p); };
+    el.innerHTML=`<div class="pav" style="background:${esc(p.color)}">${esc((p.name[0]||"?").toUpperCase())}${tools}</div><div class="pname">${esc(p.name)}</div>${label}`;
+    el.onclick=()=>{ if(!adminMode) requestProfile(p); };
     if(adminMode){
       el.querySelector(".pedit").onclick=e=>{ e.stopPropagation(); openAdminEdit(p); };
       const db=el.querySelector(".pdel"); if(db) db.onclick=e=>{ e.stopPropagation(); delProfile(p); };
@@ -1178,6 +1253,7 @@ function renderGate(){
   $("#gateManage").style.display="inline-block";
   $("#gateManage").textContent=adminMode?t("Exit admin"):t("Manage profiles");
   $("#gateTitle").textContent=adminMode?"Admin · manage profiles":(PROFILES.length?t("Who's watching?"):t("Create a profile"));
+  if(window.TVNAV&&TVNAV.armed&&$("#gate").classList.contains("open"))setTimeout(()=>TVNAV.focusFirst($("#gate")),60);
 }
 
 /* ---- admin sign-in (password 3119) ---- */
@@ -1241,9 +1317,10 @@ async function loadState(){
   if(!STATE.watchlist)STATE.watchlist=[]; if(!STATE.kv)STATE.kv={};
 }
 async function finishEnter(p){
-  PROFILE=p; KIDS=!!p.kids; adminMode=false; hi=0;
-  await loadState();
+  PROFILE=p; KIDS=!!p.kids; adminMode=false; hi=0; ADULT_UNLOCKED=false;
+  await loadState(); updateAdultMenu();
   paintAvatar(); $("#pinForm").classList.remove("open"); $("#gate").classList.remove("open"); $("#searchInput").value=""; showHome(); bootApp();
+  if(window.TVNAV&&TVNAV.armed)setTimeout(()=>TVNAV.focusFirst(document.body),80);
 }
 
 /* ---- create profile (optional PIN + security question) ---- */
@@ -1337,6 +1414,89 @@ document.addEventListener("click",e=>{ if(!e.target.closest(".lang-wrap")) $("#l
 window.addEventListener("scroll",()=>$("#nav").classList.toggle("solid",window.scrollY>80));
 LANG=lsGet("lang")||"en"; renderLangMenu(); applyLang();
 setAccent(accent); renderGenres(); initProfiles();
+/* ===========================================================================
+   TV / REMOTE (D-PAD) SPATIAL NAVIGATION
+   Smart TVs and set-top boxes send arrow keys + OK (Enter) + a Back key, with
+   no mouse. This makes every screen operable from a remote: arrows move focus
+   to the nearest element in that direction, OK activates it, Back goes up a
+   level. It stays invisible for mouse users until an arrow key is first used
+   (or a TV is detected), so desktop behaviour is unchanged.
+   =========================================================================== */
+(function(){
+  const FOCUS_SEL='a[href],button:not([disabled]),input:not([type=range]),select,textarea,[tabindex],.tile,.epitem,.ep,.genre,.pcard,.hero-dots i';
+  const TABBABLE='.tile,.ep,.genre,.pcard,.hero-dots i';
+  function makeFocusable(root){ (root||document).querySelectorAll(TABBABLE).forEach(el=>{ if(!el.hasAttribute("tabindex")) el.tabIndex=0; }); }
+  function visible(el){ if(!el||el.disabled) return false; if(el.getClientRects().length===0) return false;
+    const r=el.getBoundingClientRect(); return r.width>1 && r.height>1 && r.bottom>0 && r.right>0; }
+  // Which layer currently owns the remote? Returns null when the player is open
+  // (the player's own handler takes over there).
+  function scopeEl(){
+    if($("#player").classList.contains("open")) return null;
+    for(const s of ["#addForm","#pinForm","#recoverForm","#adminForm","#aeForm"]){ const e=$(s); if(e&&e.classList.contains("open")) return e; }
+    for(const s of [".navmenu",".lang-menu"]){ const e=document.querySelector(s+".open"); if(e) return e; }
+    if($("#detail").classList.contains("open")) return $("#detail");
+    if($("#gate").classList.contains("open")) return $("#gate");
+    return document.body;
+  }
+  function candidates(scope){ makeFocusable(scope); return [...scope.querySelectorAll(FOCUS_SEL)].filter(visible); }
+  const cen=r=>({x:r.left+r.width/2,y:r.top+r.height/2});
+  function pick(dir,cur,list){
+    const c=cen(cur.getBoundingClientRect()); let best=null,score=Infinity;
+    for(const el of list){ if(el===cur) continue; const t=cen(el.getBoundingClientRect());
+      const dx=t.x-c.x, dy=t.y-c.y; let ok,prim,off;
+      if(dir==="right"){ok=dx>2;prim=dx;off=Math.abs(dy);}
+      else if(dir==="left"){ok=dx<-2;prim=-dx;off=Math.abs(dy);}
+      else if(dir==="down"){ok=dy>2;prim=dy;off=Math.abs(dx);}
+      else {ok=dy<-2;prim=-dy;off=Math.abs(dx);}
+      if(!ok) continue;
+      const sc=prim+off*2;                       // bias toward staying in line with the cursor
+      if(sc<score){score=sc;best=el;}
+    }
+    return best;
+  }
+  function focusEl(el){ if(!el) return; el.focus({preventScroll:true}); try{ el.scrollIntoView({block:"nearest",inline:"center",behavior:"smooth"}); }catch{ el.scrollIntoView(); } }
+  function move(scope,dir){ const list=candidates(scope); if(!list.length) return null;
+    const ae=document.activeElement; const cur=(ae&&scope.contains(ae)&&visible(ae))?ae:null;
+    if(!cur){ focusEl(list[0]); return list[0]; }
+    const n=pick(dir,cur,list); if(n) focusEl(n); return n||cur; }
+  function focusFirst(scope){ const list=candidates(scope); if(!list.length) return;
+    const pref=scope.querySelector("#dPlay,#heroPlay,#playBtn,.pcard,.tile,button,a,[tabindex]");
+    focusEl(visible(pref)?pref:list[0]); }
+  // Activate the focused element. Native buttons/links fire their own Enter click,
+  // and elements with their own onkeydown handle themselves — so we only synthesize
+  // a click for plain focusable <div>s (tiles, episodes, profile cards) to avoid double-firing.
+  function activate(a,k,e){ if(!a) return;
+    if(a.onkeydown){ if(k===" ") e.preventDefault(); return; }
+    if(a.tagName==="BUTTON"||a.tagName==="A"){ if(k===" "){ e.preventDefault(); a.click(); } return; }
+    e.preventDefault(); a.click();
+  }
+  let armed=false;
+  function arm(){ if(armed) return; armed=true; document.body.classList.add("tvnav"); }
+  function back(){
+    if($("#player").classList.contains("open")) return false;   // player owns Back when open
+    if($("#detail").classList.contains("open")){ closeDetail(); return true; }
+    const open=document.querySelector(".navmenu.open,.lang-menu.open,#addForm.open,#pinForm.open,#recoverForm.open,#adminForm.open,#aeForm.open");
+    if(open){ open.classList.remove("open"); return true; }
+    return false;
+  }
+  document.addEventListener("keydown",e=>{
+    const k=e.key, kc=e.keyCode;
+    if($("#player").classList.contains("open")) return;          // handled by the player
+    const ae=document.activeElement, tag=ae&&ae.tagName;
+    const typing = ae && ((tag==="INPUT"&&ae.type!=="range")||tag==="TEXTAREA"||ae.isContentEditable);
+    const isBack = k==="Escape" || ((k==="Backspace"||k==="GoBack"||k==="BrowserBack"||kc===461||kc===10009) && !typing);
+    if(isBack){ if(back()){ e.preventDefault(); arm(); } return; }
+    if(typing) return;                                           // let text fields keep their keys
+    const scope=scopeEl(); if(!scope) return;
+    if(k==="Enter"||k===" "){ if(ae&&scope.contains(ae)&&ae!==document.body){ arm(); activate(ae,k,e); } return; }
+    const dir = k==="ArrowRight"?"right":k==="ArrowLeft"?"left":k==="ArrowDown"?"down":k==="ArrowUp"?"up":null;
+    if(!dir) return;
+    arm(); e.preventDefault(); move(scope,dir);
+  }, true);   // capture phase: run before page handlers, but only preventDefault when we act
+  // Auto-enable on TVs / low-power devices (already detected for the hero), and expose the API.
+  try{ if(typeof LOWPOWER!=="undefined" && LOWPOWER) arm(); }catch{}
+  window.TVNAV={ get armed(){return armed;}, arm, move, focusFirst, activate, candidates, visible };
+})();
 </script>
 </body>
 </html>

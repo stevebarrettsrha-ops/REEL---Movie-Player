@@ -1,0 +1,21 @@
+# REEL runtime data — generated on first run, should never be committed
+data/profiles.json
+data/*.tmp
+data/tmdb-cache.json
+data/audio-cache.json
+data/thumbs/
+**/data/profiles.json
+**/data/*.tmp
+**/data/tmdb-cache.json
+**/data/thumbs/
+
+# API keys
+tmdb.key
+**/tmdb.key
+
+# in-progress audio conversions
+*.reel-fixing.*
+
+# OS cruft
+.DS_Store
+Thumbs.db

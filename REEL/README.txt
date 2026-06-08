@@ -234,6 +234,15 @@ TVs — a few options, easiest first:
   d) A cheap Fire TV Stick / Chromecast plugged into any TV turns
      option (a) or (b) into a permanent setup.
 
+  USING A TV REMOTE (no mouse needed): when you open REEL in a TV
+  browser, the D-pad just works. Arrow keys move the highlight to
+  the nearest poster/button, OK/Enter opens or plays it, and the
+  Back button steps out (close a title, exit a menu). In the player:
+  Left/Right skip 10s, OK pauses/plays, press Up to jump to the
+  on-screen controls (then arrows + OK to reach Episodes, Next,
+  Fullscreen, etc.), and Back exits the video. On a desktop with a
+  mouse nothing changes until you first press an arrow key.
+
 
 --------------------------------------------------------------
 NO INTERNET? USE THE LAPTOP AS A HOTSPOT
@@ -293,9 +302,29 @@ and resume points, saved on this PC (in data/profiles.json) and
 shared across every device — start on the TV, finish on a phone.
 
 When creating a profile you can also:
-  - KIDS PROFILE: only G / PG-rated titles show up. This is enforced
-    by the server — a kids profile is never even sent the other
-    titles, so they can't be reached by any means from that profile.
+  - KIDS PROFILE: only titles marked kid-safe show up. The EASY way
+    to add kid content is to drop video files into the  Kids  folder —
+    everything there is automatically kid-safe and streams to kids (it
+    also shows for everyone else, under "Kids & Family"). You can also
+    mark any other title kid-safe by giving it a rating of G, PG, TV-Y,
+    TV-Y7, TV-G or TV-PG in a sidecar .json (see "rating" under ADDING
+    ARTWORK / DETAILS below). NOTE: files with NO rating (and not in the
+    Kids folder) are treated as NOT kid-safe, so they won't show to a
+    kids profile — this is deliberate, so adult files are never assumed
+    safe. Enforcement is twofold: a kids profile is never even sent the
+    other titles in its catalog, AND the server refuses to stream an
+    un-kid-rated file to a kids session even if its direct URL is typed.
+
+  - ADULT (18+) CONTENT: drop explicit files into the  Adult  folder.
+    They are HIDDEN from every profile by default, and NEVER shown or
+    streamed to a kids profile. On a normal (non-kids) profile, tap the
+    "18+" item in the top bar / menu and enter the adult password to
+    unlock them for that sitting (until you switch profile or reload).
+    The default adult password is 3119. Both the listing AND the actual
+    video stream are gated by the server, so locked files can't be
+    reached by typing their URL. To change the password, set the
+    ADULT_PIN environment variable before the first run (e.g.
+    ADULT_PIN=2580 node server.js).
   - PIN (optional): a 4-digit code required before the profile opens.
     PINs are salted + hashed (scrypt) on this PC and checked by the
     server; the code itself is never stored or sent to the browser.
