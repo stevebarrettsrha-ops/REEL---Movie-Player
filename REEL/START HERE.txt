@@ -17,6 +17,9 @@ QUICK START (full details in README.txt):
        Windows:  start-windows.bat
        Mac:      start-mac.command   (right-click -> Open the 1st time)
        Linux:    start-linux.sh      ( ./start-linux.sh  in a terminal )
+       Linux (ZIP download): if the above says "Permission denied",
+                 open a terminal in this folder and run:  bash START.sh
+                 (it fixes the launchers so they run normally next time)
   5. It prints an address like  http://192.168.1.50:8080
      — open that on any phone, tablet, laptop, or TV on your WiFi.
      Leave the launcher window open while watching; close it to stop.
@@ -25,6 +28,7 @@ FOLDER LAYOUT
   start-windows.bat    <- double-click to start (Windows)
   start-mac.command    <- double-click to start (Mac)
   start-linux.sh       <- run to start (Linux)
+  START.sh             <- Linux fallback: "bash START.sh" (for ZIP downloads)
   fix-sound-windows.bat  <- convert un-playable files (MKV/HEVC/AC3) -> MP4 (Windows)
   fix-sound-mac.command  <- convert un-playable files -> MP4 (Mac)
   fix-sound-linux.sh     <- convert un-playable files -> MP4 (Linux)
