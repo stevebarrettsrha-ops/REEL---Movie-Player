@@ -302,16 +302,29 @@ and resume points, saved on this PC (in data/profiles.json) and
 shared across every device — start on the TV, finish on a phone.
 
 When creating a profile you can also:
-  - KIDS PROFILE: only titles you have marked kid-safe show up. A
-    title counts as kid-safe when its rating is one of G, PG, TV-Y,
-    TV-Y7, TV-G or TV-PG. Set this with a sidecar .json next to the
-    file (see "rating" under ADDING ARTWORK / DETAILS below). NOTE:
-    files with NO rating are treated as NOT kid-safe, so a brand-new
-    library will show nothing on a kids profile until you tag some
-    titles — this is deliberate, so adult files are never assumed safe.
-    Enforcement is twofold: a kids profile is never even sent the other
-    titles in its catalog, AND the server refuses to stream an
+  - KIDS PROFILE: only titles marked kid-safe show up. The EASY way
+    to add kid content is to drop video files into the  Kids  folder —
+    everything there is automatically kid-safe and streams to kids (it
+    also shows for everyone else, under "Kids & Family"). You can also
+    mark any other title kid-safe by giving it a rating of G, PG, TV-Y,
+    TV-Y7, TV-G or TV-PG in a sidecar .json (see "rating" under ADDING
+    ARTWORK / DETAILS below). NOTE: files with NO rating (and not in the
+    Kids folder) are treated as NOT kid-safe, so they won't show to a
+    kids profile — this is deliberate, so adult files are never assumed
+    safe. Enforcement is twofold: a kids profile is never even sent the
+    other titles in its catalog, AND the server refuses to stream an
     un-kid-rated file to a kids session even if its direct URL is typed.
+
+  - ADULT (18+) CONTENT: drop explicit files into the  Adult  folder.
+    They are HIDDEN from every profile by default, and NEVER shown or
+    streamed to a kids profile. On a normal (non-kids) profile, tap the
+    "18+" item in the top bar / menu and enter the adult password to
+    unlock them for that sitting (until you switch profile or reload).
+    The default adult password is 3119. Both the listing AND the actual
+    video stream are gated by the server, so locked files can't be
+    reached by typing their URL. To change the password, set the
+    ADULT_PIN environment variable before the first run (e.g.
+    ADULT_PIN=2580 node server.js).
   - PIN (optional): a 4-digit code required before the profile opens.
     PINs are salted + hashed (scrypt) on this PC and checked by the
     server; the code itself is never stored or sent to the browser.

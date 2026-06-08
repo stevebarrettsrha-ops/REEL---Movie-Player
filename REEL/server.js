@@ -26,11 +26,17 @@ const SERIES_DIR = path.join(ROOT, "series");
 const SHORTS_DIR = path.join(ROOT, "Short Films");
 const DOCS_DIR   = path.join(ROOT, "Documentaries");
 const MUSIC_DIR  = path.join(ROOT, "Music Videos");
-// extra single-file libraries: [folder, default genre, url prefix]
+const KIDS_DIR   = path.join(ROOT, "Kids");     // anything here is auto kid-safe (streams to kids)
+const ADULT_DIR  = path.join(ROOT, "Adult");    // anything here is locked behind the adult password
+// extra single-file libraries. Each: { dir, genre, prefix, rating, adult }
+//   rating  -> forces a rating (so Kids content is kid-safe without per-file sidecars)
+//   adult   -> content is hidden until the adult password is entered, and never shown to kids
 const EXTRA_DIRS = [
-  [SHORTS_DIR, "Short Films",   "/Short%20Films/"],
-  [DOCS_DIR,   "Documentary",   "/Documentaries/"],
-  [MUSIC_DIR,  "Music Videos",  "/Music%20Videos/"],
+  { dir: SHORTS_DIR, genre: "Short Films",  prefix: "/Short%20Films/" },
+  { dir: DOCS_DIR,   genre: "Documentary",  prefix: "/Documentaries/" },
+  { dir: MUSIC_DIR,  genre: "Music Videos", prefix: "/Music%20Videos/" },
+  { dir: KIDS_DIR,   genre: "Kids",         prefix: "/Kids/",  rating: "G" },
+  { dir: ADULT_DIR,  genre: "Adult",        prefix: "/Adult/", rating: "X", adult: true },
 ];
 // the front-end may be named reel-prime.html (shipped) or index.html (repo) — use whichever exists
 const FRONTEND   = ["reel-prime.html","index.html"].map(f=>path.join(ROOT,f)).find(f=>{ try{return fs.existsSync(f);}catch{return false;} }) || path.join(ROOT,"reel-prime.html");
@@ -63,6 +69,7 @@ function gradFor(name){ return GRADS[hash(name)%GRADS.length]; }
 function scoreFor(name){ return 80 + (hash(name)%19); }            // 80–98, stable
 function slug(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""); }
 function isRecent(file){ try { return (Date.now()-fs.statSync(file).mtimeMs) < 14*864e5; } catch { return false; } }
+function isUnder(fp, dir){ return fp===dir || fp.startsWith(dir + path.sep); }   // true when fp lives inside dir
 
 // "The Title (2019).mp4" -> {title:"The Title", year:2019}
 function parseMovieName(file){
@@ -251,8 +258,8 @@ function buildLibrary(){
     });
   }
 
-  // EXTRA single-file libraries: Short Films / Documentaries / Music Videos
-  for(const [dir, defGenre, prefix] of EXTRA_DIRS){
+  // EXTRA single-file libraries: Short Films / Documentaries / Music Videos / Kids / Adult
+  for(const { dir, genre: defGenre, prefix, rating: defRating, adult } of EXTRA_DIRS){
     for(const f of listVideos(dir)){
       const full = path.join(dir, f);
       const { title, year } = parseMovieName(f);
@@ -261,9 +268,10 @@ function buildLibrary(){
       lib.push({
         id: uid(side.title || title), type:"movie",
         title: side.title || title, year: side.year || year || "",
-        rating: side.rating || "NR", runtime: side.runtime || "", cc: false,
+        rating: side.rating || defRating || "NR", runtime: side.runtime || "", cc: false,
         license: "Local file", score: side.score || scoreFor(title),
         genres: side.genres || [defGenre], category: defGenre, cast: side.cast || "",
+        adult: !!adult,
         accolade: side.accolade || null, badge: side.badge || (isRecent(full) ? "RECENTLY ADDED" : null),
         desc: side.desc || "",
         grad: side.grad || gradFor(title),
@@ -567,6 +575,8 @@ function ensureAdmin(){ const d=readData(); if(!d.profiles.some(p=>p.admin)){
   d.profiles.push({ id:"admin", name:"Admin", color:"#8a96a6", admin:true, kids:false, pinHash:hashPin("3119"), qIndex:null, ansHash:null });
   d.state["admin"]={ watchlist:[], kv:{} }; writeData(d);
   console.log("  (Seeded Admin profile — password 3119. Change it in admin mode and see README.)"); } }
+// seed the adult-content password (default 3119, or the ADULT_PIN env var) on first run
+function ensureAdultPin(){ const d=readData(); if(!d.adultPinHash){ d.adultPinHash=hashPin(process.env.ADULT_PIN||"3119"); writeData(d); } }
 
 /* ---- request router -------------------------------------------------------- */
 const server = http.createServer((req, res) => {
@@ -599,6 +609,17 @@ const server = http.createServer((req, res) => {
       sendJSON(res,{ token });
     });
   }
+  // ---- adult content unlock: exchange the adult password for an unlock on this session ----
+  if(url === "/api/adult/unlock" && req.method === "POST"){
+    const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
+    if(s.kids) return sendJSON(res,{ error:"forbidden" },403);     // a kids session can never unlock adult content
+    return collectBody(req, body => {
+      const wait = lockedOut("adult"); if(wait) return sendJSON(res,{ error:"too many attempts", retryAfter:wait },429);
+      const stored = readData().adultPinHash;
+      if(!stored || !verifyPin(body.pin||"", stored)){ noteFail("adult"); return sendJSON(res,{ error:"wrong password" },401); }
+      clearFail("adult"); s.adultUnlocked=true; sendJSON(res,{ ok:true });
+    });
+  }
   if(url === "/api/admin/profiles" && req.method === "GET"){
     if(!isAdmin(req)) return sendJSON(res,{ error:"unauthorized" },401);
     return sendJSON(res, adminProfiles(readData()));
@@ -627,7 +648,9 @@ const server = http.createServer((req, res) => {
   if(url === "/api/catalog"){
     const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
     return getLibrary().then(lib => {
-      const out = s.kids ? lib.filter(isKidRated) : lib;
+      const out = s.kids ? lib.filter(c => isKidRated(c) && !c.adult)   // kids: kid-safe and never adult
+                 : (s.adultUnlocked ? lib                              // adult unlocked: everything
+                 : lib.filter(c => !c.adult));                         // default: hide adult until unlocked
       res.writeHead(200,{ "Content-Type":"application/json", "Cache-Control":"no-store, no-cache, must-revalidate", "Pragma":"no-cache" });
       res.end(JSON.stringify(out));
     });
@@ -678,8 +701,8 @@ const server = http.createServer((req, res) => {
     return collectBody(req, body => { const d=readData(); d.state[id]={ watchlist:body.watchlist||[], kv:body.kv||{} }; writeData(d); sendJSON(res,{ ok:true }); });
   }
   // ---- map a media URL (/movies/.., /series/.., etc.) to a safe disk path ----
-  const MEDIA_DIRS=[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR];
-  const mediaPrefixes=["/movies/","/series/","/Short Films/","/Documentaries/","/Music Videos/"];
+  const MEDIA_DIRS=[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR, KIDS_DIR, ADULT_DIR];
+  const mediaPrefixes=["/movies/","/series/","/Short Films/","/Documentaries/","/Music Videos/","/Kids/","/Adult/"];
   function resolveMedia(u){
     if(!mediaPrefixes.some(p=>u.startsWith(p))) return null;
     const safe = path.normalize(u).replace(/^(\.\.[\/\\])+/,"");
@@ -735,7 +758,7 @@ const server = http.createServer((req, res) => {
     if(fs.existsSync(outPath)) return serveFile(req, res, outPath);
     // not cached yet — need the source video path from ?src=
     let src=""; try{ src = new URL(req.url,"http://x").searchParams.get("src") || ""; }catch{}
-    const MEDIA_ROOTS=[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR];
+    const MEDIA_ROOTS=[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR, KIDS_DIR, ADULT_DIR];
     const srcOk = src && MEDIA_ROOTS.some(d => path.resolve(src).startsWith(d));   // only our media
     if(srcOk && hasFfmpeg() && fs.existsSync(src)){
       return makeThumb(src, outPath).then(made => {
@@ -746,14 +769,17 @@ const server = http.createServer((req, res) => {
     res.writeHead(404); return res.end();                   // no thumb -> front-end shows gradient
   }
   // serve videos / posters from the media folders only (no path escaping)
-  if(url.startsWith("/movies/")||url.startsWith("/series/")||url.startsWith("/Short Films/")||url.startsWith("/Documentaries/")||url.startsWith("/Music Videos/")){
+  if(["/movies/","/series/","/Short Films/","/Documentaries/","/Music Videos/","/Kids/","/Adult/"].some(p=>url.startsWith(p))){
     const s = sessionFor(req);
     if(!s){ res.writeHead(401); return res.end(); }                 // no anonymous direct-URL streaming
     const fp = resolveMedia(url);
     if(!fp){ res.writeHead(403); return res.end(); }
-    if(s.kids){                                                     // kids: enforce the rating on the file itself
+    const underAdult = isUnder(fp, ADULT_DIR);
+    if(s.kids){                                                     // kids: never adult; otherwise enforce the rating
+      if(underAdult){ res.writeHead(403); return res.end(); }
       return kidMediaAllowed(url).then(ok => { if(!ok){ res.writeHead(403); return res.end(); } serveFile(req, res, fp); });
     }
+    if(underAdult && !s.adultUnlocked){ res.writeHead(403); return res.end(); }   // need the adult password first
     return serveFile(req, res, fp);
   }
   res.writeHead(404); res.end("Not found");
@@ -789,12 +815,13 @@ function printAddresses(){
     console.log("      (or wait — the address will appear here within a minute).");
   }
 }
-[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR, DATA_DIR].forEach(d => { try { fs.mkdirSync(d, { recursive:true }); } catch {} });
+[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR, KIDS_DIR, ADULT_DIR, DATA_DIR].forEach(d => { try { fs.mkdirSync(d, { recursive:true }); } catch {} });
 // move data from the old layout (root) into data/ so upgrades don't lose profiles
 try { const o=path.join(ROOT,"profiles.json");    if(fs.existsSync(o) && !fs.existsSync(DATA_FILE))  fs.renameSync(o, DATA_FILE); } catch {}
 try { const o=path.join(ROOT,"tmdb-cache.json");  if(fs.existsSync(o) && !fs.existsSync(TMDB_CACHE)) fs.renameSync(o, TMDB_CACHE); } catch {}
 tmdbCache = (()=>{ try { return JSON.parse(fs.readFileSync(TMDB_CACHE,"utf8")); } catch { return {}; } })();
 ensureAdmin();
+ensureAdultPin();
 
 // One bad request (or a transient fs/network hiccup) should never take down movie night.
 process.on("uncaughtException",  e => console.error("  (recovered from an unexpected error: " + (e && e.message) + ")"));

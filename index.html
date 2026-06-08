@@ -370,6 +370,15 @@
     <div class="add-actions"><button class="add-cancel" id="adminCancel">Cancel</button><button class="add-save" id="adminOk">Sign in</button></div>
   </div>
 </div>
+<div class="add-form" id="adultForm">
+  <div class="add-card">
+    <h3>Adult content (18+)</h3>
+    <div class="add-hint" style="margin-bottom:10px">Enter the password to unlock explicit titles for this session.</div>
+    <input id="adultPin" placeholder="Password" maxlength="8" inputmode="numeric" type="password" style="text-align:center;letter-spacing:.4em">
+    <div class="add-hint" id="adultErr" style="color:#e50914;display:none">Wrong password</div>
+    <div class="add-actions"><button class="add-cancel" id="adultCancel">Cancel</button><button class="add-save" id="adultOk">Unlock</button></div>
+  </div>
+</div>
 <div class="add-form" id="aeForm">
   <div class="add-card">
     <h3 id="aeTitle">Edit profile</h3>
@@ -390,12 +399,14 @@
       <button class="navmenu-item" id="mMovies">Movies</button>
       <button class="navmenu-item" id="mSeries">TV shows</button>
       <button class="navmenu-item" id="mCats">Categories</button>
+      <button class="navmenu-item" id="mAdult" style="display:none">🔞 Adult (18+)</button>
     </div>
   </div>
   <button class="link active hidesm" id="navHome">Home</button>
   <button class="link hidesm" id="navMovies">Movies</button>
   <button class="link hidesm" id="navSeries">TV shows</button>
   <button class="link hidesm" id="navCats">Categories</button>
+  <button class="link hidesm" id="navAdult" style="display:none">18+</button>
   <div class="grow"></div>
   <label class="search"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 10-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg><input id="searchInput" placeholder="Search"></label>
   <div class="lang-wrap hidesm">
@@ -661,6 +672,7 @@ const grad=c=>{const g=(c&&c.grad)||["#2a2f3a","#1a1d24","#23262e"];return `radi
 const art=c=>c&&c.backdrop?`url('${c.backdrop}') center/cover no-repeat, ${grad(c)}`:grad(c);
 const epArt=(e,series)=>e&&e.still?`url('${e.still}') center/cover no-repeat, ${grad(series)}`:art(series);
 let KIDS=false;                                                                  // set when a kids profile is active
+let ADULT_UNLOCKED=false;                                                         // set after the adult password is entered this session
 const KID_RATINGS=["G","PG","TV-Y","TV-Y7","TV-G","TV-PG","NR"];
 const isKid=c=>KID_RATINGS.includes((c.rating||"NR").toUpperCase());
 const vis=()=>KIDS?CATALOG.filter(isKid):CATALOG;                                 // catalog the current profile may see
@@ -788,6 +800,7 @@ function renderRows(){
   add(t("Sci-Fi & Fantasy"),C.filter(c=>c.genres.some(g=>["Science fiction","Fantasy","Action and adventure"].includes(g))));
   add(t("Kids & Family"),C.filter(c=>c.genres.some(g=>["Kids","Comedy"].includes(g))));
   add(t("Drama"),C.filter(c=>c.genres.includes("Drama")));
+  if(ADULT_UNLOCKED) add("Adult (18+)",C.filter(c=>c.adult||c.category==="Adult"));
 }
 
 /* 7) HOVER PREVIEW CARD ---------------------------------------------------- */
@@ -1142,7 +1155,28 @@ $("#navCats").onclick=showCategories;
   $("#mMovies").onclick=()=>{ close(); setActive("navMovies"); filterRows(c=>c.type==="movie",t("Movies")); };
   $("#mSeries").onclick=()=>{ close(); setActive("navSeries"); filterRows(c=>c.type==="series",t("TV shows")); };
   $("#mCats").onclick  =()=>{ close(); showCategories(); };
+  $("#mAdult").onclick =()=>{ close(); openAdult(); };
 })();
+
+/* ---- adult (18+) content: hidden by default, unlocked with a password ---- */
+function updateAdultMenu(){ const show=!!PROFILE && !KIDS; const na=$("#navAdult"), ma=$("#mAdult");
+  if(na) na.style.display=show?"":"none"; if(ma) ma.style.display=show?"":"none"; }
+function showAdult(){ setActive("navAdult"); filterRows(c=>c.adult||c.category==="Adult", "Adult (18+)"); }
+function openAdult(){ if(KIDS) return;                       // never for kids profiles
+  if(ADULT_UNLOCKED){ showAdult(); return; }
+  $("#adultPin").value=""; $("#adultErr").style.display="none"; $("#adultForm").classList.add("open"); setTimeout(()=>$("#adultPin").focus(),50); }
+$("#navAdult").onclick=openAdult;
+$("#adultCancel").onclick=()=>$("#adultForm").classList.remove("open");
+$("#adultOk").onclick=async()=>{
+  if(!SERVER_OK){ $("#adultErr").style.display="block"; return; }
+  try{
+    const r=await fetch("/api/adult/unlock?token="+encodeURIComponent(TOKEN),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pin:$("#adultPin").value})});
+    if(!r.ok){ $("#adultErr").style.display="block"; return; }
+    ADULT_UNLOCKED=true; $("#adultForm").classList.remove("open");
+    await loadCatalog(); renderRows(); showAdult(); toast("Adult content unlocked");
+  }catch{ $("#adultErr").style.display="block"; }
+};
+$("#adultPin").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#adultOk").click(); });
 $("#listShortcut").onclick=e=>{ e.stopPropagation(); $("#profileMenu").classList.toggle("open"); };
 document.addEventListener("click",e=>{ if(!e.target.closest(".avatar-wrap")) $("#profileMenu").classList.remove("open"); });
 $("#pmList").onclick=()=>{ $("#profileMenu").classList.remove("open"); setActive(""); filterRows(c=>inList(c.id),t("My List")); };
@@ -1283,8 +1317,8 @@ async function loadState(){
   if(!STATE.watchlist)STATE.watchlist=[]; if(!STATE.kv)STATE.kv={};
 }
 async function finishEnter(p){
-  PROFILE=p; KIDS=!!p.kids; adminMode=false; hi=0;
-  await loadState();
+  PROFILE=p; KIDS=!!p.kids; adminMode=false; hi=0; ADULT_UNLOCKED=false;
+  await loadState(); updateAdultMenu();
   paintAvatar(); $("#pinForm").classList.remove("open"); $("#gate").classList.remove("open"); $("#searchInput").value=""; showHome(); bootApp();
   if(window.TVNAV&&TVNAV.armed)setTimeout(()=>TVNAV.focusFirst(document.body),80);
 }

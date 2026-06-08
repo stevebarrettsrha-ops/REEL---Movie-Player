@@ -10,6 +10,8 @@ QUICK START (full details in README.txt):
        (MP4 / H.264 only — convert others with HandBrake.)
        You can also use the  Short Films ,  Documentaries , and
        Music Videos  folders — they show up as their own categories.
+       Put kid-safe videos in  Kids  (auto-allowed for kids profiles),
+       and 18+ videos in  Adult  (hidden until you enter password 3119).
   3. Put TV shows in the  series  folder, one folder per show.
   4. START THE SERVER by double-clicking the launcher for your system:
        Windows:  start-windows.bat
@@ -34,6 +36,8 @@ FOLDER LAYOUT
   Short Films\         <- short films (shown under "Short Films")
   Documentaries\       <- documentaries (shown under "Documentary")
   Music Videos\        <- music videos (shown under "Music Videos")
+  Kids\                <- KID-SAFE videos (auto-allowed for kids profiles)
+  Adult\               <- 18+ videos (hidden; password 3119 to unlock)
   data\                <- saved profiles, PINs (hashed), watch history
 
 Files that appear automatically once you run it:
