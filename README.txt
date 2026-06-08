@@ -234,6 +234,15 @@ TVs — a few options, easiest first:
   d) A cheap Fire TV Stick / Chromecast plugged into any TV turns
      option (a) or (b) into a permanent setup.
 
+  USING A TV REMOTE (no mouse needed): when you open REEL in a TV
+  browser, the D-pad just works. Arrow keys move the highlight to
+  the nearest poster/button, OK/Enter opens or plays it, and the
+  Back button steps out (close a title, exit a menu). In the player:
+  Left/Right skip 10s, OK pauses/plays, press Up to jump to the
+  on-screen controls (then arrows + OK to reach Episodes, Next,
+  Fullscreen, etc.), and Back exits the video. On a desktop with a
+  mouse nothing changes until you first press an arrow key.
+
 
 --------------------------------------------------------------
 NO INTERNET? USE THE LAPTOP AS A HOTSPOT
@@ -293,9 +302,16 @@ and resume points, saved on this PC (in data/profiles.json) and
 shared across every device — start on the TV, finish on a phone.
 
 When creating a profile you can also:
-  - KIDS PROFILE: only G / PG-rated titles show up. This is enforced
-    by the server — a kids profile is never even sent the other
-    titles, so they can't be reached by any means from that profile.
+  - KIDS PROFILE: only titles you have marked kid-safe show up. A
+    title counts as kid-safe when its rating is one of G, PG, TV-Y,
+    TV-Y7, TV-G or TV-PG. Set this with a sidecar .json next to the
+    file (see "rating" under ADDING ARTWORK / DETAILS below). NOTE:
+    files with NO rating are treated as NOT kid-safe, so a brand-new
+    library will show nothing on a kids profile until you tag some
+    titles — this is deliberate, so adult files are never assumed safe.
+    Enforcement is twofold: a kids profile is never even sent the other
+    titles in its catalog, AND the server refuses to stream an
+    un-kid-rated file to a kids session even if its direct URL is typed.
   - PIN (optional): a 4-digit code required before the profile opens.
     PINs are salted + hashed (scrypt) on this PC and checked by the
     server; the code itself is never stored or sent to the browser.

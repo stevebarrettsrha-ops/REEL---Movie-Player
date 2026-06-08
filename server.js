@@ -509,6 +509,21 @@ function sendJSON(res,obj,code){ res.writeHead(code||200,{ "Content-Type":"appli
 // deliberately NOT here — otherwise every unrated local file would show on kids profiles,
 // defeating the lock. Tag a title kid-safe by giving its sidecar .json a rating like "G"/"PG".
 const KID_RATINGS = ["G","PG","TV-Y","TV-Y7","TV-G","TV-PG"];
+const isKidRated = c => KID_RATINGS.includes((c.rating||"NR").toUpperCase());
+// Per-rating media gate: a kids session may only fetch media (video or artwork) that
+// belongs to a kid-rated title. Without this, a kid could stream an adult file by typing
+// its URL directly, since the catalog filter only hides it from the listing.
+async function kidMediaAllowed(decodedUrl){
+  const dec = u => { try{ return decodeURIComponent(u); }catch{ return u; } };
+  const lib = await getLibrary();
+  for(const c of lib){
+    if(!isKidRated(c)) continue;
+    for(const u of [c.src, c.poster, c.backdrop]) if(u && dec(u)===decodedUrl) return true;
+    if(c.seasons) for(const se of c.seasons) for(const e of (se.episodes||[]))
+      for(const u of [e.src, e.still]) if(u && dec(u)===decodedUrl) return true;
+  }
+  return false;
+}
 const SECURITY_QUESTIONS = [
   "What is your mother's maiden name?",
   "Which town were you born in?",
@@ -612,7 +627,7 @@ const server = http.createServer((req, res) => {
   if(url === "/api/catalog"){
     const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
     return getLibrary().then(lib => {
-      const out = s.kids ? lib.filter(c => KID_RATINGS.includes((c.rating||"NR").toUpperCase())) : lib;
+      const out = s.kids ? lib.filter(isKidRated) : lib;
       res.writeHead(200,{ "Content-Type":"application/json", "Cache-Control":"no-store, no-cache, must-revalidate", "Pragma":"no-cache" });
       res.end(JSON.stringify(out));
     });
@@ -714,6 +729,7 @@ const server = http.createServer((req, res) => {
 
   // auto-extracted poster frames — generated lazily on first request, then cached
   if(url.startsWith("/_thumbs/")){
+    if(!sessionFor(req)){ res.writeHead(401); return res.end(); }
     const fname = path.basename(url);                       // e.g. some-key.jpg
     const outPath = path.join(DATA_DIR, "thumbs", fname);
     if(fs.existsSync(outPath)) return serveFile(req, res, outPath);
@@ -731,9 +747,13 @@ const server = http.createServer((req, res) => {
   }
   // serve videos / posters from the media folders only (no path escaping)
   if(url.startsWith("/movies/")||url.startsWith("/series/")||url.startsWith("/Short Films/")||url.startsWith("/Documentaries/")||url.startsWith("/Music Videos/")){
-    if(!sessionFor(req)){ res.writeHead(401); return res.end(); }   // no anonymous direct-URL streaming
+    const s = sessionFor(req);
+    if(!s){ res.writeHead(401); return res.end(); }                 // no anonymous direct-URL streaming
     const fp = resolveMedia(url);
     if(!fp){ res.writeHead(403); return res.end(); }
+    if(s.kids){                                                     // kids: enforce the rating on the file itself
+      return kidMediaAllowed(url).then(ok => { if(!ok){ res.writeHead(403); return res.end(); } serveFile(req, res, fp); });
+    }
     return serveFile(req, res, fp);
   }
   res.writeHead(404); res.end("Not found");
