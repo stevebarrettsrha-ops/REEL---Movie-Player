@@ -1,0 +1,36 @@
+# Keep line endings sane on every machine that downloads REEL, so the
+# launchers actually run. Without this, a Windows checkout with autocrlf
+# can rewrite the shell scripts with CRLF, which breaks them on macOS/Linux.
+
+# Default: normalize text to LF inside the repo, native on checkout.
+* text=auto
+
+# Shell launchers MUST stay LF or bash/zsh won't run them (macOS/Linux).
+*.sh       text eol=lf
+*.command  text eol=lf
+
+# Windows batch launchers want CRLF.
+*.bat      text eol=crlf
+
+# Plain LF for the app's own source/data so it serves identically everywhere.
+*.js       text eol=lf
+*.html     text eol=lf
+*.json     text eol=lf
+*.vtt      text eol=lf
+
+# Media / artwork: byte-for-byte, never line-ending "fixed".
+*.mp4  binary
+*.m4v  binary
+*.mkv  binary
+*.webm binary
+*.mov  binary
+*.avi  binary
+*.ts   binary
+*.flv  binary
+*.wmv  binary
+*.ogg  binary
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.webp binary
+*.ico  binary
