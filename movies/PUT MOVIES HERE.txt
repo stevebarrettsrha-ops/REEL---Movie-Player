@@ -1,0 +1,52 @@
+PUT YOUR MOVIES IN THIS FOLDER
+==============================
+
+Drop video files right here. Name them simply:
+
+    The Big Trip (2023).mp4
+    Grandpa 80th Birthday.mp4
+    Sintel (2010).mp4
+
+The year in (brackets) is optional but looks nice and helps the
+artwork lookup find the right film.
+
+FORMAT — important
+  Web browsers reliably play .mp4 files (H.264 video + AAC audio).
+  MKV, AVI, MOV and most others will NOT play.
+  Convert anything else for free with HandBrake (handbrake.fr):
+  open the file, pick the "Fast 1080p30" preset, click Start.
+
+OPTIONAL extra details
+  Put a text file with the SAME name but ending in .json next to a
+  movie to add a description, genres, rating, etc. Example:
+
+    The Big Trip (2023).mp4
+    The Big Trip (2023).json
+
+  ...and inside that .json:
+    {
+      "title": "The Big Trip",
+      "year": 2023,
+      "genres": ["Documentary", "Drama"],
+      "rating": "PG",
+      "runtime": "1h 42m",
+      "desc": "Our two weeks across the island, start to finish.",
+      "cast": "The whole family"
+    }
+
+GIVE A MOVIE ITS OWN PICTURE (poster / thumbnail)
+  Put an image file with the SAME name next to the video:
+
+    The Big Trip (2023).mp4
+    The Big Trip (2023).jpg      <- .jpg, .png or .webp all work
+
+  That image becomes the card art. A wide (landscape) image looks
+  best, since the cards are wide. With no image, REEL shows a
+  coloured gradient instead.
+
+  AUTOMATIC: if the free tool "ffmpeg" is installed on the PC running
+  the server, REEL will grab a frame from each video automatically
+  and use it as the picture — no image files needed. (Install from
+  ffmpeg.org; if it isn't installed, just use the .jpg method above.)
+
+You can delete this text file once you've added a movie or two.

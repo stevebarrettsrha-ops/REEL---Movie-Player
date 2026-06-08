@@ -1,0 +1,21 @@
+PUT YOUR MUSIC VIDEOS IN THIS FOLDER
+====================================
+
+Drop video files right here, named simply:
+
+    Artist - Song Name (2022).mp4
+
+They appear in REEL under the "Music Videos" category — open the
+square-dot icon in the top bar, or the Categories page.
+
+FORMAT: .mp4 (H.264) plays everywhere. Convert other formats for
+free with HandBrake (handbrake.fr) — see the movies folder note.
+
+OPTIONAL details: put a same-named .json next to a file to add a
+description, year, runtime, etc. Example:
+
+    Artist - Song Name (2022).mp4
+    Artist - Song Name (2022).json
+    { "desc": "A short description.", "runtime": "8m", "rating": "G" }
+
+You can delete this note once you've added something.

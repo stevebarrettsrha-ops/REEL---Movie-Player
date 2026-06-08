@@ -1,0 +1,50 @@
+PUT YOUR TV SHOWS IN THIS FOLDER
+================================
+
+Make ONE FOLDER per show. Inside it you can either drop the episodes
+directly, OR organise them into season subfolders — REEL reads BOTH,
+and it looks inside subfolders no matter how deeply they're nested.
+
+SIMPLE LAYOUT (all episodes loose in the show folder):
+
+    series\
+        Family Adventures\
+            S01E01 - The Beginning.mp4
+            S01E02 - The Road Trip.mp4
+
+SEASON-FOLDER LAYOUT (tidy — recommended for big shows):
+
+    series\
+        Courage the Cowardly Dog (1999-2002)\
+            Season 1 (1999-2000)\
+                Courage - S01E01 - The Shadow.mp4
+                Courage - S01E02 - Cabaret.mp4
+            Season 2 (2000-01)\
+                Courage - S02E01 - ...mp4
+            Specials (1995-2014)\
+                Courage - S00E01 - The Pilot.mp4
+
+REEL groups everything into seasons automatically. It decides the
+season number from, in order:
+  1. the SxxExx in the file name (S02E05 = season 2), OR
+  2. the SUBFOLDER name ("Season 4", "Specials", "Extras").
+"Specials" / "Extras" / "Bonus" folders (or S00Exx files) become a
+"Specials" section.
+
+EPISODE NUMBER STYLES that work:
+    S01E02      s1e2      1x02
+    S01E25-E26  (a double / multi-episode file - shown as "25-26")
+
+IMPORTANT - one show per top-level folder
+  Everything inside a show's folder is treated as THAT show. So a
+  folder like "OTHER Cartoons You'd Like" should NOT live inside
+  another show - put it directly under  series\  as its own show,
+  otherwise its episodes get mixed into the show around it.
+
+PICTURES (optional)
+  - Show poster: put  poster.jpg  (or cover.jpg) in the show folder.
+  - Episode thumbnail: an image with the SAME name as the episode,
+    next to it. With none, REEL uses a colour gradient (or an
+    auto-grabbed frame if ffmpeg is installed - see the movies note).
+
+FORMAT: .mp4 (H.264). Convert others with HandBrake (handbrake.fr).
