@@ -32,7 +32,8 @@ const EXTRA_DIRS = [
   [DOCS_DIR,   "Documentary",   "/Documentaries/"],
   [MUSIC_DIR,  "Music Videos",  "/Music%20Videos/"],
 ];
-const FRONTEND   = path.join(ROOT, "reel-prime.html");
+// the front-end may be named reel-prime.html (shipped) or index.html (repo) — use whichever exists
+const FRONTEND   = ["reel-prime.html","index.html"].map(f=>path.join(ROOT,f)).find(f=>{ try{return fs.existsSync(f);}catch{return false;} }) || path.join(ROOT,"reel-prime.html");
 const DATA_DIR   = path.join(ROOT, "data");           // saved data lives here
 const DATA_FILE  = path.join(DATA_DIR, "profiles.json");   // profiles + hashed PINs/answers + per-profile history
 
@@ -162,41 +163,55 @@ function hasFfmpeg(){
   catch { FFMPEG=null; }
   return FFMPEG;
 }
+// Run ffmpeg/ffprobe WITHOUT blocking the event loop. The old code used execFileSync,
+// which froze the entire single-threaded server for the whole job — up to 30 minutes for
+// an audio re-encode, during which nobody else could stream. These run a child process
+// and resolve a promise, so the server keeps serving everyone else.
+const execFileP = require("util").promisify(require("child_process").execFile);
+function runFfmpeg(args, timeoutMs){
+  return new Promise((resolve, reject) => {
+    const cp = require("child_process").spawn("ffmpeg", args, { stdio:"ignore" });
+    const to = setTimeout(() => { try{ cp.kill("SIGKILL"); }catch{} reject(new Error("timeout")); }, timeoutMs);
+    cp.on("error", e => { clearTimeout(to); reject(e); });
+    cp.on("close", code => { clearTimeout(to); code === 0 ? resolve() : reject(new Error("ffmpeg exit "+code)); });
+  });
+}
+
 // Browsers can decode AAC/MP3/Opus/Vorbis/FLAC audio. AC3/EAC3/DTS/TrueHD (common in
 // Web-DL & Blu-ray rips) play NO sound in a browser. Detect the audio codec with ffprobe
 // so we can warn the viewer and offer a one-click fix.
 const WEB_AUDIO = ["aac","mp3","opus","vorbis","flac"];
 const audioCodecCache = {};   // path -> codec string (cached in data/audio-cache.json)
-function audioCodecOf(videoFull){
+async function audioCodecOf(videoFull){
   if(!hasFfmpeg()) return null;                 // can't tell without ffprobe; assume ok
   try{
     const st = fs.statSync(videoFull); const ck = videoFull + ":" + st.size;
     if(audioCodecCache[ck]) return audioCodecCache[ck];
-    const out = require("child_process").execFileSync("ffprobe", [
+    const { stdout } = await execFileP("ffprobe", [
       "-v", "error", "-select_streams", "a:0",
       "-show_entries", "stream=codec_name", "-of", "csv=p=0", videoFull
-    ], { timeout:8000 }).toString().trim().replace(/,+$/,"");
+    ], { timeout:8000 });
+    const out = stdout.toString().trim().replace(/,+$/,"");
     audioCodecCache[ck] = out || "none";
     return audioCodecCache[ck];
   }catch{ return null; }
 }
 // returns true only when we KNOW the audio won't play in a browser
-function audioUnplayable(videoFull){
-  const c = audioCodecOf(videoFull);
+async function audioUnplayable(videoFull){
+  const c = await audioCodecOf(videoFull);
   if(!c || c==="none") return false;            // unknown / no audio -> don't cry wolf
   return !WEB_AUDIO.includes(c.toLowerCase());
 }
-function makeThumb(videoFull, outPath){
+async function makeThumb(videoFull, outPath){
   if(!hasFfmpeg()) return false;
   try{
     fs.mkdirSync(path.dirname(outPath), { recursive:true });
-    const cp = require("child_process");
     for(const ss of [12, 4, 1, 0]){     // shorter clips fall through to an earlier frame
       try{
-        cp.execFileSync("ffmpeg", [
+        await runFfmpeg([
           "-y", "-ss", String(ss), "-i", videoFull,
           "-frames:v", "1", "-vf", "scale=640:-1", outPath
-        ], { stdio:"ignore", timeout:20000 });
+        ], 20000);
         if(fs.existsSync(outPath) && fs.statSync(outPath).size > 0) return true;
       }catch{ /* try next seek point */ }
     }
@@ -358,21 +373,33 @@ function serveFile(req, res, filePath){
   const type  = MIME[path.extname(filePath).toLowerCase()] || "application/octet-stream";
   const range = req.headers.range;
 
+  // Pipe a read stream and ALWAYS destroy it when the client goes away. Without this,
+  // every aborted request (TVs seeking/closing constantly) leaks an open file handle
+  // until the process hits its open-file limit and all reads start failing.
+  function pipe(opts, headers, code){
+    res.writeHead(code, headers);
+    if(req.method === "HEAD") return res.end();        // headers only, no body
+    const stream = fs.createReadStream(filePath, opts);
+    const done = () => stream.destroy();
+    res.on("close", done);
+    stream.on("error", () => { try{ res.end(); }catch{} });
+    stream.on("end", () => res.removeListener("close", done));
+    stream.pipe(res);
+  }
+
   if(range){
     const m = range.match(/bytes=(\d*)-(\d*)/);
     let start = m && m[1] ? parseInt(m[1],10) : 0;
     let end   = m && m[2] ? parseInt(m[2],10) : stat.size - 1;
     if(start > end || start >= stat.size){ res.writeHead(416,{"Content-Range":`bytes */${stat.size}`}); return res.end(); }
-    res.writeHead(206, {
+    pipe({ start, end }, {
       "Content-Range": `bytes ${start}-${end}/${stat.size}`,
       "Accept-Ranges": "bytes",
       "Content-Length": end - start + 1,
       "Content-Type": type,
-    });
-    fs.createReadStream(filePath, { start, end }).pipe(res);
+    }, 206);
   } else {
-    res.writeHead(200, { "Content-Length": stat.size, "Content-Type": type, "Accept-Ranges":"bytes" });
-    fs.createReadStream(filePath).pipe(res);
+    pipe({}, { "Content-Length": stat.size, "Content-Type": type, "Accept-Ranges":"bytes" }, 200);
   }
 }
 
@@ -448,11 +475,26 @@ async function enrich(lib){
   }
   return lib;
 }
-async function getLibrary(){ return enrich(buildLibrary()); }
+// Cache the built+enriched catalog briefly. buildLibrary() walks every media folder with
+// synchronous fs calls; doing that on EVERY /api/catalog hit blocked the event loop and
+// stalled the home screen for every device. A short TTL keeps things fresh (new files
+// appear within a few seconds) while collapsing a burst of requests into one disk scan.
+let _libCache = null, _libCacheAt = 0;
+const LIB_TTL = 10000;
+function invalidateLibrary(){ _libCache = null; }
+async function getLibrary(){
+  const now = Date.now();
+  if(_libCache && (now - _libCacheAt) < LIB_TTL) return _libCache;
+  const lib = await enrich(buildLibrary());
+  _libCache = lib; _libCacheAt = now;
+  return lib;
+}
 
 /* ---- profile + history persistence ---------------------------------------- */
 function readData(){ try{ return JSON.parse(fs.readFileSync(DATA_FILE,"utf8")); }catch{ return {profiles:[],state:{}}; } }
-function writeData(d){ try{ fs.writeFileSync(DATA_FILE, JSON.stringify(d,null,2)); }catch(e){ console.error("  save failed:", e.message); } }
+// Write atomically: a crash mid-write used to truncate profiles.json and wipe every
+// profile + hashed PIN. Writing to a temp file then renaming makes the swap all-or-nothing.
+function writeData(d){ try{ const tmp = DATA_FILE + ".tmp"; fs.writeFileSync(tmp, JSON.stringify(d,null,2)); fs.renameSync(tmp, DATA_FILE); }catch(e){ console.error("  save failed:", e.message); } }
 function collectBody(req,cb){ let b=""; req.on("data",c=>{ b+=c; if(b.length>5e6) req.destroy(); }); req.on("end",()=>{ try{ cb(JSON.parse(b||"{}")); }catch{ cb({}); } }); }
 function genId(){ return "p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 function sendJSON(res,obj,code){ res.writeHead(code||200,{ "Content-Type":"application/json" }); res.end(JSON.stringify(obj)); }
@@ -463,13 +505,26 @@ function sendJSON(res,obj,code){ res.writeHead(code||200,{ "Content-Type":"appli
    history are only served to a request carrying a valid token. So a kids
    profile literally never receives adult titles, and a locked profile can't
    be entered (or its history read) without the PIN. */
-const KID_RATINGS = ["G","PG","TV-Y","TV-Y7","TV-G","TV-PG","NR"];
+// Kid-safe ratings. NOTE: "NR" (the default for any file without a sidecar rating) is
+// deliberately NOT here — otherwise every unrated local file would show on kids profiles,
+// defeating the lock. Tag a title kid-safe by giving its sidecar .json a rating like "G"/"PG".
+const KID_RATINGS = ["G","PG","TV-Y","TV-Y7","TV-G","TV-PG"];
 const SECURITY_QUESTIONS = [
   "What is your mother's maiden name?",
   "Which town were you born in?",
   "What is your father's first name?",
 ];
-const sessions = {};   // token -> { profileId, kids, admin }
+const sessions = {};   // token -> { profileId, kids, admin, exp }
+const SESSION_TTL = 24*60*60*1000;   // tokens expire after 24h (were immortal -> slow leak)
+// reap expired sessions so the map can't grow without bound
+setInterval(() => { const now=Date.now(); for(const t in sessions){ if(sessions[t].exp < now) delete sessions[t]; } }, 60*60*1000).unref?.();
+// Simple brute-force throttle: 4-digit PINs are only 10k combos, so without this an
+// attacker on the WiFi could try them all in seconds. After 5 wrong tries for a given
+// profile, that profile is locked out for 30s.
+const loginFails = {};   // key -> { n, until }
+function lockedOut(key){ const e=loginFails[key]; return (e && e.until>Date.now()) ? Math.ceil((e.until-Date.now())/1000) : 0; }
+function noteFail(key){ const e=loginFails[key]||{n:0,until:0}; e.n++; if(e.n>=5){ e.until=Date.now()+30000; e.n=0; } loginFails[key]=e; }
+function clearFail(key){ delete loginFails[key]; }
 function hashSecret(v){ const salt=crypto.randomBytes(16).toString("hex"); const h=crypto.scryptSync(String(v),salt,32).toString("hex"); return salt+":"+h; }
 function verifySecret(v, stored){ if(!stored) return false; const [salt,h]=String(stored).split(":"); if(!salt||!h) return false;
   const calc=crypto.scryptSync(String(v),salt,32).toString("hex"); const a=Buffer.from(h,"hex"), b=Buffer.from(calc,"hex");
@@ -477,9 +532,16 @@ function verifySecret(v, stored){ if(!stored) return false; const [salt,h]=Strin
 const hashPin = hashSecret, verifyPin = verifySecret;                  // PINs and answers share the scheme
 const normAns = a => String(a||"").trim().toLowerCase().replace(/\s+/g," ");   // answers are case/space-insensitive
 function newToken(){ return crypto.randomBytes(24).toString("hex"); }
+function cookieToken(req){ const c=req.headers.cookie||""; const m=c.match(/(?:^|;\s*)reel_session=([^;]+)/); return m?decodeURIComponent(m[1]):null; }
 function getToken(req){ try{ const u=new URL(req.url,"http://x"); const q=u.searchParams.get("token");
-  const h=req.headers.authorization; return q || (h && h.startsWith("Bearer ") ? h.slice(7) : null); }catch{ return null; } }
-function sessionFor(req){ const t=getToken(req); return t ? sessions[t] : null; }
+  const h=req.headers.authorization; return q || (h && h.startsWith("Bearer ") ? h.slice(7) : null) || cookieToken(req); }catch{ return cookieToken(req); } }
+function sessionFor(req){ const t=getToken(req); const s = t ? sessions[t] : null;
+  if(s && s.exp < Date.now()){ delete sessions[t]; return null; }   // expired
+  if(s) s.exp = Date.now() + SESSION_TTL;                            // sliding expiry on use
+  return s; }
+// <video>/<img> tags can't send a Bearer header, so also drop the token in a cookie:
+// that lets the browser stream protected media while the session lasts.
+function setSessionCookie(res, token){ res.setHeader("Set-Cookie", `reel_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL/1000}`); }
 function isAdmin(req){ const s=sessionFor(req); return !!(s && s.admin); }
 // picker list: real (non-admin) profiles only, with no secrets
 function publicProfiles(d){ return d.profiles.filter(p=>!p.admin).map(p=>({ id:p.id, name:p.name, color:p.color, kids:!!p.kids, locked:!!p.pinHash, hasQuestion:p.qIndex!=null })); }
@@ -502,8 +564,11 @@ const server = http.createServer((req, res) => {
     return collectBody(req, body => {
       const d=readData(); const p=d.profiles.find(x=>x.id===body.id);
       if(!p || p.admin) return sendJSON(res,{ error:"no such profile" },404);   // admin can't be entered as a watch profile
-      if(p.pinHash && !verifyPin(body.pin||"", p.pinHash)) return sendJSON(res,{ error:"wrong pin" },401);
-      const token=newToken(); sessions[token]={ profileId:p.id, kids:!!p.kids, admin:false };
+      const wait = lockedOut("p:"+body.id); if(wait) return sendJSON(res,{ error:"too many attempts", retryAfter:wait },429);
+      if(p.pinHash && !verifyPin(body.pin||"", p.pinHash)){ noteFail("p:"+body.id); return sendJSON(res,{ error:"wrong pin" },401); }
+      clearFail("p:"+body.id);
+      const token=newToken(); sessions[token]={ profileId:p.id, kids:!!p.kids, admin:false, exp:Date.now()+SESSION_TTL };
+      setSessionCookie(res, token);
       sendJSON(res,{ token, profile:{ id:p.id, name:p.name, color:p.color, kids:!!p.kids } });
     });
   }
@@ -511,8 +576,11 @@ const server = http.createServer((req, res) => {
   if(url === "/api/admin/auth" && req.method === "POST"){
     return collectBody(req, body => {
       const d=readData(); const a=d.profiles.find(p=>p.admin);
-      if(!a || !verifyPin(body.pin||"", a.pinHash)) return sendJSON(res,{ error:"wrong password" },401);
-      const token=newToken(); sessions[token]={ profileId:a.id, kids:false, admin:true };
+      const wait = lockedOut("admin"); if(wait) return sendJSON(res,{ error:"too many attempts", retryAfter:wait },429);
+      if(!a || !verifyPin(body.pin||"", a.pinHash)){ noteFail("admin"); return sendJSON(res,{ error:"wrong password" },401); }
+      clearFail("admin");
+      const token=newToken(); sessions[token]={ profileId:a.id, kids:false, admin:true, exp:Date.now()+SESSION_TTL };
+      setSessionCookie(res, token);
       sendJSON(res,{ token });
     });
   }
@@ -610,30 +678,32 @@ const server = http.createServer((req, res) => {
     const src = new URL(req.url,"http://x").searchParams.get("src") || "";
     const fp = resolveMedia(decodeURIComponent(src));
     if(!fp || !fs.existsSync(fp)) return sendJSON(res,{ known:false });
-    const codec = audioCodecOf(fp);
-    if(!codec) return sendJSON(res,{ known:false });   // no ffprobe -> can't tell
-    return sendJSON(res,{ known:true, codec, playable: codec==="none" || WEB_AUDIO.includes(codec.toLowerCase()) });
+    return audioCodecOf(fp).then(codec => {
+      if(!codec) return sendJSON(res,{ known:false });   // no ffprobe -> can't tell
+      sendJSON(res,{ known:true, codec, playable: codec==="none" || WEB_AUDIO.includes(codec.toLowerCase()) });
+    });
   }
   // one-click fix: re-encode just the audio to AAC (video is copied, so it's fast), in place
   if(url.startsWith("/api/fixaudio") && req.method==="POST"){
     const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
     if(!hasFfmpeg()) return sendJSON(res,{ error:"ffmpeg not installed" },400);
-    return collectBody(req, body => {
+    return collectBody(req, async body => {
       const fp = resolveMedia(decodeURIComponent(body.src||""));
       if(!fp || !fs.existsSync(fp)) return sendJSON(res,{ error:"no such file" },404);
       const dir=path.dirname(fp), ext=path.extname(fp), base=path.basename(fp,ext);
       const tmp=path.join(dir, base+".reel-fixing"+ext);
       try{
-        // copy video as-is, convert audio to stereo AAC -> plays in every browser
-        require("child_process").execFileSync("ffmpeg", [
+        // copy video as-is, convert audio to stereo AAC -> plays in every browser.
+        // Runs async (spawn) so the rest of the house can keep streaming during the encode.
+        await runFfmpeg([
           "-y", "-i", fp,
           "-map", "0:v:0", "-map", "0:a:0?",
           "-c:v", "copy", "-c:a", "aac", "-ac", "2", "-b:a", "192k", tmp
-        ], { stdio:"ignore", timeout:1000*60*30 });
+        ], 1000*60*30);
         if(fs.existsSync(tmp) && fs.statSync(tmp).size>0){
           fs.renameSync(tmp, fp);                       // replace original
-          delete audioCodecCache[fp+":"+ (fs.statSync(fp).size)];   // invalidate stale cache key
           for(const k of Object.keys(audioCodecCache)) if(k.startsWith(fp+":")) delete audioCodecCache[k];
+          invalidateLibrary();                          // poster/playable info may have changed
           return sendJSON(res,{ ok:true });
         }
         try{ fs.unlinkSync(tmp); }catch{}
@@ -652,13 +722,16 @@ const server = http.createServer((req, res) => {
     const MEDIA_ROOTS=[MOVIES_DIR, SERIES_DIR, SHORTS_DIR, DOCS_DIR, MUSIC_DIR];
     const srcOk = src && MEDIA_ROOTS.some(d => path.resolve(src).startsWith(d));   // only our media
     if(srcOk && hasFfmpeg() && fs.existsSync(src)){
-      const made = makeThumb(src, outPath);
-      if(made && fs.existsSync(outPath)) return serveFile(req, res, outPath);
+      return makeThumb(src, outPath).then(made => {
+        if(made && fs.existsSync(outPath)) return serveFile(req, res, outPath);
+        res.writeHead(404); res.end();
+      });
     }
     res.writeHead(404); return res.end();                   // no thumb -> front-end shows gradient
   }
   // serve videos / posters from the media folders only (no path escaping)
   if(url.startsWith("/movies/")||url.startsWith("/series/")||url.startsWith("/Short Films/")||url.startsWith("/Documentaries/")||url.startsWith("/Music Videos/")){
+    if(!sessionFor(req)){ res.writeHead(401); return res.end(); }   // no anonymous direct-URL streaming
     const fp = resolveMedia(url);
     if(!fp){ res.writeHead(403); return res.end(); }
     return serveFile(req, res, fp);
@@ -702,6 +775,27 @@ try { const o=path.join(ROOT,"profiles.json");    if(fs.existsSync(o) && !fs.exi
 try { const o=path.join(ROOT,"tmdb-cache.json");  if(fs.existsSync(o) && !fs.existsSync(TMDB_CACHE)) fs.renameSync(o, TMDB_CACHE); } catch {}
 tmdbCache = (()=>{ try { return JSON.parse(fs.readFileSync(TMDB_CACHE,"utf8")); } catch { return {}; } })();
 ensureAdmin();
+
+// One bad request (or a transient fs/network hiccup) should never take down movie night.
+process.on("uncaughtException",  e => console.error("  (recovered from an unexpected error: " + (e && e.message) + ")"));
+process.on("unhandledRejection", e => console.error("  (recovered from an unexpected error: " + (e && e.message) + ")"));
+
+// A clear, non-scary message instead of a raw stack trace when the port is taken.
+server.on("error", e => {
+  if(e.code === "EADDRINUSE"){
+    console.log("\n  >>> Couldn't start: port " + PORT + " is already in use. <<<");
+    console.log("      REEL may already be running in another window — use that one,");
+    console.log("      or close it first. (Advanced: change PORT near the top of server.js.)\n");
+  } else {
+    console.log("\n  >>> Couldn't start the server: " + e.message + " <<<\n");
+  }
+  process.exit(1);
+});
+
+// Nudge the owner to change the seeded admin password while it's still the default.
+try { const a = readData().profiles.find(p=>p.admin); if(a && verifyPin("3119", a.pinHash))
+  console.log("\n  >>> Admin password is still the default (3119). Change it: sign-in screen -> Manage profiles. <<<"); } catch {}
+
 server.listen(PORT, "0.0.0.0", () => {
   const lib = buildLibrary();
   console.log("\n  REEL home server is running.\n");

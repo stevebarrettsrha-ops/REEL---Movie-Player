@@ -585,6 +585,9 @@ const store={
 
 /* 3) STATE + helpers ------------------------------------------------------- */
 const $=s=>document.querySelector(s);
+// Escape anything derived from filenames / sidecar JSON / profile names before it goes
+// into innerHTML, so a title like  <img src=x onerror=...>.mp4  can't run script.
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
 /* --- interface language (translates the UI chrome; titles/descriptions come
        from your files/TMDB and stay as provided). Add a language by adding a
@@ -739,9 +742,9 @@ function tile(c){
   const r=resume(c);
   const el=document.createElement("div");el.className="tile";el.dataset.id=c.id;
   el.innerHTML=`<div class="tile-art" style="background:${art(c)}">
-      ${c.badge?`<div class="tag">${c.badge}</div>`:""}${c.type==="series"?'<div class="typ">SERIES</div>':""}
+      ${c.badge?`<div class="tag">${esc(c.badge)}</div>`:""}${c.type==="series"?'<div class="typ">SERIES</div>':""}
       <div class="corner"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
-      <div class="name">${c.title}</div></div>
+      <div class="name">${esc(c.title)}</div></div>
     <div class="tile-bar"><i style="width:${r.pct}%"></i></div>
     <div class="tile-info"><span class="t">${c.year}</span>
       <span class="m">${c.type==="series"
@@ -789,7 +792,7 @@ function openPreview(c,el){
   pvVid.play().then(()=>pvVid.classList.add("on")).catch(()=>{});
   $("#pvList").classList.toggle("on",inList(c.id));
   $("#pvAccolade").style.display=c.accolade?"flex":"none";if(c.accolade)$("#pvAccolade").querySelector("span").textContent=c.accolade;
-  $("#pvMeta").innerHTML=`<span class="chip">${c.rating}</span><span class="cc">CC</span><span>${c.year}</span><span class="dot"></span><span>${c.runtime}</span>`;
+  $("#pvMeta").innerHTML=`<span class="chip">${esc(c.rating)}</span><span class="cc">CC</span><span>${esc(c.year)}</span><span class="dot"></span><span>${esc(c.runtime)}</span>`;
   $("#pvGenres").innerHTML=`<b>Genres:</b> ${c.genres.join(", ")}`;
   // position: centered on tile, clamped to viewport
   const w=360,cx=r.left+r.width/2;let left=cx-w/2;left=Math.max(12,Math.min(left,window.innerWidth-w-12));
@@ -810,7 +813,7 @@ function openDetail(c){
   detailC=c;hideAllViews();preview.classList.remove("show");
   $("#dHero").style.background=art(c);$("#dTitle").textContent=c.title;$("#dScore").textContent=c.score+"% match";
   $("#dYear").textContent=c.year;$("#dRating").textContent=c.rating;$("#dRuntime").textContent=c.runtime;
-  $("#dDesc").textContent=c.desc;$("#dCast").innerHTML="<b>"+t("Cast")+":</b> "+c.cast+" &nbsp;·&nbsp; <b>"+t("License")+":</b> "+c.license;
+  $("#dDesc").textContent=c.desc;$("#dCast").innerHTML="<b>"+t("Cast")+":</b> "+esc(c.cast)+" &nbsp;·&nbsp; <b>"+t("License")+":</b> "+esc(c.license);
   const rz=resume(c);
   $("#dPlayLabel").textContent=c.type==="series"?(rz.started&&rz.ep?t("Resume")+" "+epTag(eps(c).find(e=>e.id===rz.ep.id)||rz.ep):t("Play")+" "+(eps(c)[0]?epTag(eps(c)[0]):"")):(rz.started?t("Resume"):t("Play"));
   $("#dList").classList.toggle("on",inList(c.id));
@@ -822,7 +825,7 @@ function openDetail(c){
       head.textContent=multi?(season.name||("Season "+season.n)):t("Episodes");epWrap.appendChild(head);
       season.episodes.forEach(eRaw=>{const e=Object.assign({_season:season.n},eRaw);
         const s=store.get(pkey(c,e));const pct=s&&s.dur?s.time/s.dur*100:0;const row=document.createElement("div");row.className="ep";
-        row.innerHTML=`<div class="ep-n">${e.epLabel||e.ep}</div><div class="ep-thumb" style="background:${epArt(e,c)}"><div class="pf"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="ebar" style="width:${pct}%"></div></div><div class="ep-meta"><div class="et"><span style="color:var(--ink)">${e.title}</span><span>${e.runtime}</span></div><div class="ed">${e.desc}</div></div>`;
+        row.innerHTML=`<div class="ep-n">${e.epLabel||e.ep}</div><div class="ep-thumb" style="background:${epArt(e,c)}"><div class="pf"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div><div class="ebar" style="width:${pct}%"></div></div><div class="ep-meta"><div class="et"><span style="color:var(--ink)">${esc(e.title)}</span><span>${esc(e.runtime)}</span></div><div class="ed">${esc(e.desc)}</div></div>`;
         row.onclick=()=>{closeDetail();openPlayer(c,e);};epWrap.appendChild(row);});
     });
   }
@@ -843,7 +846,7 @@ function openPlayer(c,ep){
   video.muted=false; if(!video.volume) video.volume=1; $("#vol").value=video.volume; updMute();   // make sure sound is on
   if(c.type==="series")store.set("last:"+c.id,ep.id);
   $("#epBtn").classList.toggle("hide",c.type!=="series");
-  $("#pTitle").textContent=c.title;$("#pMeta").textContent=c.type==="series"?`S1:E${ep.ep} · ${ep.title}`:`${c.year} · ${c.license} · ${c.runtime}`;
+  $("#pTitle").textContent=c.title;$("#pMeta").textContent=c.type==="series"?`${epTag(ep)} · ${ep.title}`:`${c.year} · ${c.license} · ${c.runtime}`;
   player.classList.add("open");document.body.classList.add("player-open");$("#upnext").classList.remove("show");$("#eppanel").classList.remove("open");
   buildEmbed();renderEpList();applyCaptions();
   const s=store.get(pkey(c,ep));
@@ -1027,7 +1030,7 @@ function renderEpList(){const l=$("#epList");l.innerHTML="";if(current?.type!=="
     if(multi){const h=document.createElement("div");h.className="ep-season";h.textContent=season.name||("Season "+season.n);l.appendChild(h);}
     season.episodes.forEach(eRaw=>{const e=Object.assign({_season:season.n},eRaw);
       const s=store.get(pkey(current,e));const pct=s&&s.dur?s.time/s.dur*100:0;const on=currentEp&&currentEp.id===e.id;const it=document.createElement("div");it.className="epitem"+(on?" on":"");it.tabIndex=0;
-      it.innerHTML=`<div class="et" style="background:${epArt(e,current)}"><div class="eb" style="width:${pct}%"></div></div><div class="ex"><div class="n">${e.epLabel||e.ep}. ${e.title}</div><div class="d">${e.runtime}</div></div>`;
+      it.innerHTML=`<div class="et" style="background:${epArt(e,current)}"><div class="eb" style="width:${pct}%"></div></div><div class="ex"><div class="n">${e.epLabel||e.ep}. ${esc(e.title)}</div><div class="d">${esc(e.runtime)}</div></div>`;
       const go=()=>openPlayer(current,e);it.onclick=go;it.onkeydown=ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();go();}};
       if(on)activeEl=it;l.appendChild(it);});
   });
@@ -1165,7 +1168,7 @@ function renderGate(){
     const del='<span class="pdel" title="Delete">×</span>';
     const tools = adminMode ? (editIcon + (p.admin?"":del)) : lock;
     const label = p.admin ? '<div class="pkids">ADMIN</div>' : (p.kids ? '<div class="pkids">KIDS</div>' : "");
-    el.innerHTML=`<div class="pav" style="background:${p.color}">${(p.name[0]||"?").toUpperCase()}${tools}</div><div class="pname">${p.name}</div>${label}`;
+    el.innerHTML=`<div class="pav" style="background:${esc(p.color)}">${esc((p.name[0]||"?").toUpperCase())}${tools}</div><div class="pname">${esc(p.name)}</div>${label}`;
     el.querySelector(".pav").onclick=()=>{ if(!adminMode) requestProfile(p); };
     if(adminMode){
       el.querySelector(".pedit").onclick=e=>{ e.stopPropagation(); openAdminEdit(p); };
