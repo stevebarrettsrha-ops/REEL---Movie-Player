@@ -1,0 +1,46 @@
+==============================================================
+ FULLY OFFLINE NETWORK  -  make your own WiFi with no internet
+==============================================================
+
+Use this when there is NO internet and NO router - this turns the
+laptop itself into a WiFi network so phones, tablets and TVs can
+join it and watch REEL completely offline.
+
+You only ever click TWO files. Nothing to type.
+
+--------------------------------------------------------------
+ TO TURN THE WiFi ON
+--------------------------------------------------------------
+  1. Double-click:   1 - START offline WiFi.bat
+  2. Windows asks "Do you want to allow this app to make
+     changes?"  ->  click YES.
+  3. The window shows the WiFi name and password. Done.
+  4. On each phone / tablet / TV, join that WiFi (same as
+     joining any WiFi), then start REEL and open the web
+     address REEL shows you (usually http://192.168.137.1:8080).
+
+--------------------------------------------------------------
+ TO TURN THE WiFi OFF (when finished)
+--------------------------------------------------------------
+  1. Double-click:   2 - STOP offline WiFi.bat
+  2. Click YES on the popup. The laptop goes back to normal.
+
+--------------------------------------------------------------
+ WANT A DIFFERENT WiFi NAME / PASSWORD?
+--------------------------------------------------------------
+Right-click  "1 - START offline WiFi.bat"  ->  Edit, and change
+the two lines near the top:
+     set "WIFINAME=REEL"
+     set "PASSWORD=YourPassword"
+The password must be at least 8 characters. Save and use it as
+normal.
+
+--------------------------------------------------------------
+ IS THIS SAFE?
+--------------------------------------------------------------
+Yes. These use only Windows' own built-in "hosted network"
+feature (the netsh command). They do not install anything,
+do not touch your files, and do not change any settings
+permanently - turning the WiFi off (file 2) puts everything
+back to normal. This only works on Windows.
+==============================================================
