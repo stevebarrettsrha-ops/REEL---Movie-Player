@@ -1,0 +1,77 @@
+==============================================================
+ FULLY OFFLINE NETWORK  -  make your own WiFi with no internet
+==============================================================
+
+Use this when there is NO internet and NO router - it turns the
+computer itself into a WiFi network so phones, tablets and TVs
+can join it and watch REEL completely offline.
+
+OPEN THE FOLDER FOR YOUR COMPUTER, then use the two files inside:
+
+   Windows\    1 - START offline WiFi.bat   /  2 - STOP offline WiFi.bat
+   Mac\        1 - START offline WiFi.command / 2 - STOP offline WiFi.command
+   Linux\      1 - START offline WiFi.sh    /  2 - STOP offline WiFi.sh
+
+You only ever use TWO files: number 1 to turn the WiFi ON,
+number 2 to turn it OFF.
+
+--------------------------------------------------------------
+ WINDOWS
+--------------------------------------------------------------
+  ON:  double-click  Windows\1 - START offline WiFi.bat
+       -> click YES on the "allow changes?" popup. Done.
+  OFF: double-click  Windows\2 - STOP offline WiFi.bat  (click YES).
+  Nothing to type. The window shows the WiFi name + password and
+  the web address to open (usually http://192.168.137.1:8080).
+
+--------------------------------------------------------------
+ MAC
+--------------------------------------------------------------
+  Apple does not let a script flip the hotspot on by itself, so
+  these open the right settings screen and tell you the ONE switch
+  to turn on (about 20 seconds, no typing).
+  ON:  double-click  Mac\1 - START offline WiFi.command
+       (first time only: right-click it -> Open, so macOS allows it)
+  OFF: double-click  Mac\2 - STOP offline WiFi.command
+  Web address is usually http://192.168.2.1:8080
+
+--------------------------------------------------------------
+ LINUX
+--------------------------------------------------------------
+  Open a terminal in the Linux folder and run:
+  ON:   bash "1 - START offline WiFi.sh"
+  OFF:  bash "2 - STOP offline WiFi.sh"
+  (Or double-click and choose "Run in Terminal" if your file
+   manager offers it.) Enter your password if asked. Web address
+   is usually http://10.42.0.1:8080
+
+--------------------------------------------------------------
+ WANT A DIFFERENT WiFi NAME / PASSWORD?
+--------------------------------------------------------------
+Windows + Linux: open the "1 - START" file in a text editor and
+change the two lines near the top:
+     WIFINAME / ssid  =  REEL
+     PASSWORD / key   =  YourPassword
+Mac: type the name + password in the "Wi-Fi Options..." box that
+the settings screen shows you.
+The password must be at least 8 characters.
+
+--------------------------------------------------------------
+ HOW TO WATCH ONCE THE WiFi IS ON
+--------------------------------------------------------------
+  1. On each phone / tablet / TV, join the new WiFi (same as
+     joining any WiFi) using the name + password above.
+  2. Start REEL the normal way (start-windows.bat / start-mac.command
+     / ./start-linux.sh in the MAIN folder).
+  3. Open the web address REEL prints, in a browser, on each device.
+
+--------------------------------------------------------------
+ IS THIS SAFE?
+--------------------------------------------------------------
+Yes. Each script uses only the operating system's OWN built-in
+WiFi-sharing feature (Windows "hosted network", macOS Internet
+Sharing, Linux NetworkManager hotspot). They install nothing, do
+not touch your files, and make no permanent changes - running the
+"2 - STOP" file (or turning sharing off on Mac) puts everything
+back to normal.
+==============================================================
