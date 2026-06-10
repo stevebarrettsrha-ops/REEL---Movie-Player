@@ -17,7 +17,9 @@ cd "$(dirname "$0")" || exit 1
 # Self-heal: restore the "this file is runnable" flag that a ZIP download strips
 # off every launcher sitting next to this one. Quietly ignore any that aren't here.
 chmod +x START.sh start-linux.sh start-mac.command \
-         fix-sound-linux.sh fix-sound-mac.command 2>/dev/null
+         fix-sound-linux.sh fix-sound-mac.command \
+         Launchers/reel-launch.sh Launchers/install-linux-launcher.sh \
+         "Launchers/REEL.app/Contents/MacOS/REEL" 2>/dev/null
 
 if ! command -v node >/dev/null 2>&1; then
   echo

@@ -20,11 +20,26 @@ QUICK START (full details in README.txt):
        Linux (ZIP download): if the above says "Permission denied",
                  open a terminal in this folder and run:  bash START.sh
                  (it fixes the launchers so they run normally next time)
+     ONE-CLICK DESKTOP ICON (optional): the  Launchers  folder has REEL-logo
+                 launchers that start the server AND open your browser for you:
+                   Windows:  double-click  Launchers\Create Desktop Shortcut.bat
+                             once -> a REEL icon appears on your Desktop.
+                   macOS:    double-click  Launchers/REEL.app  (keep it in this
+                             folder). Right-click -> Open the very first time.
+                   Linux:    run  bash Launchers/install-linux-launcher.sh  once
+                             -> "REEL" appears in your apps menu and Desktop.
   5. It prints an address like  http://192.168.1.50:8080
      — open that on any phone, tablet, laptop, or TV on your WiFi.
      Leave the launcher window open while watching; close it to stop.
 
 FOLDER LAYOUT
+  Launchers\           <- one-click REEL-logo launchers (all OSes):
+     REEL.bat                    <- Windows: starts the server + opens browser
+     Create Desktop Shortcut.bat <- Windows: makes a REEL desktop icon (run once)
+     REEL.app                    <- macOS: double-clickable app with the REEL logo
+     reel-launch.sh              <- Linux: starts the server + opens browser
+     install-linux-launcher.sh   <- Linux: adds REEL to apps menu + Desktop
+     REEL.ico / REEL.png / *.icns<- the REEL logo in each OS's icon format
   start-windows.bat    <- double-click to start (Windows)
   start-mac.command    <- double-click to start (Mac)
   start-linux.sh       <- run to start (Linux)

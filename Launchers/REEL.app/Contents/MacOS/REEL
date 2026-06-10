@@ -1,0 +1,28 @@
+#!/bin/bash
+# ============================================================================
+#  REEL.app launcher  (macOS)
+#  Starts the REEL home server and opens the player in your default browser.
+#  This .app must stay inside the REEL project folder (in Launchers/), because
+#  it finds the server relative to its own location.
+# ============================================================================
+# REEL.app/Contents/MacOS/REEL  ->  ../../..  = Launchers  ->  ..  = project root
+ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+
+if [ ! -f "$ROOT/server.js" ]; then
+  osascript -e 'display dialog "Please keep REEL.app inside the REEL project folder (in the Launchers folder, next to start-mac.command)." buttons {"OK"} with icon caution with title "REEL"' >/dev/null 2>&1
+  exit 1
+fi
+cd "$ROOT" || exit 1
+URL="http://localhost:8080"
+
+isup(){ /usr/bin/nc -z 127.0.0.1 8080 >/dev/null 2>&1; }
+
+# already running -> just open the browser, don't start a second copy
+if ! isup; then
+  # open the server in a visible Terminal window (shows the phone/TV addresses,
+  # and stays open while watching — close it to stop REEL)
+  open -a Terminal "$ROOT/start-mac.command"
+fi
+
+for _ in $(seq 1 30); do isup && break; sleep 1; done
+open "$URL"
