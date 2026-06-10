@@ -3,10 +3,12 @@ data/profiles.json
 data/*.tmp
 data/tmdb-cache.json
 data/audio-cache.json
+data/fix-cache.json
 data/thumbs/
 **/data/profiles.json
 **/data/*.tmp
 **/data/tmdb-cache.json
+**/data/fix-cache.json
 **/data/thumbs/
 
 # API keys

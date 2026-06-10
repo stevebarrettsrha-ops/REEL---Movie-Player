@@ -46,6 +46,20 @@ function walk(dir){
   return out;
 }
 
+// ---- incremental cache -----------------------------------------------------
+// Probing every file with four ffprobe calls on every run is slow, so once a file
+// is confirmed browser-ready (or freshly converted) we remember its size+mtime in
+// data/fix-cache.json and skip re-checking it next time. Add one new file and only
+// THAT file is scanned — everything already done is left alone. If a file is later
+// replaced or edited, its size/mtime change and it gets re-checked automatically.
+const CACHE_FILE = path.join(ROOT, "data", "fix-cache.json");
+function loadCache(){ try { return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8")) || {}; } catch { return {}; } }
+function saveCache(c){ try { fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true }); fs.writeFileSync(CACHE_FILE, JSON.stringify(c)); } catch {} }
+function sig(file){ try { const s = fs.statSync(file); return s.size + ":" + Math.round(s.mtimeMs); } catch { return null; } }
+const cacheKey = file => path.relative(ROOT, file);   // location-independent key
+let cache = loadCache();
+let cacheChanged = false;
+
 console.log("\n  REEL — Make Web-Ready (batch converter)\n  =======================================\n");
 
 if (!have("ffmpeg") || !have("ffprobe")){
@@ -72,8 +86,14 @@ console.log("  Scanning " + files.length + " file(s)...\n");
 // Anything else — including 10-bit video, exotic profiles, or files ffprobe
 // can't read — gets converted, because "can't tell" is safer than "assume fine".
 const jobs = [];
-let unreadable = 0;
+let unreadable = 0, skipped = 0;
 for (const f of files){
+  // Already confirmed browser-ready on an earlier run and unchanged since? Skip it
+  // without spending four ffprobe calls — this is what makes re-runs after adding a
+  // new file fast instead of re-scanning the whole library.
+  const k = cacheKey(f), s = sig(f);
+  if (s && cache[k] === s){ skipped++; continue; }
+
   const ext = path.extname(f).toLowerCase();
   const vc  = (probe(f, "v", "codec_name") || "").toLowerCase();
   const ac  = (probe(f, "a", "codec_name") || "").toLowerCase();
@@ -90,12 +110,19 @@ for (const f of files){
   const audioOK  = ac === "" || ac === "none" || WEB_AUDIO.includes(ac);
   const containerOK = WEB_CONTAINER.includes(ext);
 
-  if (containerOK && videoOK && audioOK && probedOk) continue;   // already fine, skip
+  if (containerOK && videoOK && audioOK && probedOk){            // already fine, skip
+    if (s){ cache[k] = s; cacheChanged = true; }                 // remember it so it's never re-probed
+    continue;
+  }
   jobs.push({ f, ext, vc, ac, pix, prof, videoOK, audioOK, containerOK, tenBit, oddChroma, probedOk });
 }
+if (skipped) console.log("  Skipped " + skipped + " already-converted file(s) (cached).\n");
+if (cacheChanged) saveCache(cache);   // persist newly-confirmed files even if conversions follow
 
 if (!jobs.length){
-  console.log("  Good news — every file is already browser-ready. Nothing to do.\n");
+  console.log("  Good news — every file is already browser-ready. Nothing to do.");
+  if (skipped) console.log("  (" + skipped + " file(s) were recognised from the cache and skipped instantly.)");
+  console.log("");
   process.exit(0);
 }
 
@@ -141,13 +168,20 @@ jobs.forEach((j, i) => {
   try {
     cp.execFileSync("ffmpeg", args, { stdio: "ignore", timeout: 1000 * 60 * 60 });
     if (fs.existsSync(tmp) && fs.statSync(tmp).size > 0){
-      if (ext.toLowerCase() === ".mp4") fs.renameSync(tmp, f);
-      else { fs.renameSync(tmp, finalOut); try { fs.unlinkSync(f); } catch {} }
+      let outFile;
+      if (ext.toLowerCase() === ".mp4"){ fs.renameSync(tmp, f); outFile = f; }
+      else { fs.renameSync(tmp, finalOut); try { fs.unlinkSync(f); } catch {} outFile = finalOut; }
+      // Remember the freshly-converted file so the next run leaves it alone instead of
+      // probing (and re-judging) it again. Drop any stale entry for the old name.
+      const osig = sig(outFile), nk = cacheKey(outFile);
+      if (osig){ cache[nk] = osig; cacheChanged = true; }
+      if (cacheKey(f) !== nk) delete cache[cacheKey(f)];
       console.log("done");
       done++;
     } else { try { fs.unlinkSync(tmp); } catch {} console.log("FAILED (no output)"); failed++; }
   } catch (e){ try { fs.unlinkSync(tmp); } catch {} console.log("FAILED"); failed++; }
 });
 
+if (cacheChanged) saveCache(cache);   // persist conversion results for the next run
 console.log("\n  Finished. Converted " + done + " file(s)" + (failed ? ", " + failed + " failed" : "") + ".");
 console.log("  Start REEL (or refresh the page) — the new files will play with sound.\n");
