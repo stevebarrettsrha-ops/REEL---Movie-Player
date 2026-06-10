@@ -209,21 +209,59 @@ async function audioUnplayable(videoFull){
   if(!c || c==="none") return false;            // unknown / no audio -> don't cry wolf
   return !WEB_AUDIO.includes(c.toLowerCase());
 }
-async function makeThumb(videoFull, outPath){
+// Thumbnail generation is CPU-heavy (HEVC/H265 decode especially). When a whole
+// episode list opens the browser fires one /_thumbs/ request PER episode at once.
+// Without a limit that spawns 15-20 simultaneous ffmpeg jobs that starve each other,
+// blow past the timeout, and 404 — which is why some thumbnails came back blank.
+// So we (a) cap how many ffmpeg jobs run at once, and (b) share one job between
+// duplicate concurrent requests for the same output file.
+const THUMB_MAX_CONCURRENT = Math.max(2, Math.min(4, (os.cpus()?.length || 2) - 1));
+let thumbActive = 0;
+const thumbWaiters = [];                       // queued jobs waiting for a slot
+const thumbInflight = new Map();               // outPath -> Promise<bool> (de-dup)
+function acquireThumbSlot(){
+  if(thumbActive < THUMB_MAX_CONCURRENT){ thumbActive++; return Promise.resolve(); }
+  return new Promise(res => thumbWaiters.push(res));
+}
+function releaseThumbSlot(){
+  const next = thumbWaiters.shift();
+  if(next) next();                             // hand the slot straight to the next waiter
+  else thumbActive--;
+}
+async function makeThumbJob(videoFull, outPath){
   if(!hasFfmpeg()) return false;
+  await acquireThumbSlot();
   try{
     fs.mkdirSync(path.dirname(outPath), { recursive:true });
+    // Write to a unique temp file then rename, so a killed/timed-out job can never
+    // leave a partial/zero-byte image behind, and parallel jobs can't clobber output.
+    const tmp = outPath + "." + process.pid + "." + Date.now() + ".tmp.jpg";
     for(const ss of [12, 4, 1, 0]){     // shorter clips fall through to an earlier frame
       try{
         await runFfmpeg([
-          "-y", "-ss", String(ss), "-i", videoFull,
-          "-frames:v", "1", "-vf", "scale=640:-1", outPath
-        ], 20000);
-        if(fs.existsSync(outPath) && fs.statSync(outPath).size > 0) return true;
-      }catch{ /* try next seek point */ }
+          "-y", "-ss", String(ss), "-i", videoFull, "-an",   // no audio: faster
+          "-frames:v", "1", "-vf", "scale=640:-1", tmp
+        ], 30000);
+        if(fs.existsSync(tmp) && fs.statSync(tmp).size > 0){
+          try{ fs.renameSync(tmp, outPath); }
+          catch{ try{ fs.copyFileSync(tmp, outPath); fs.unlinkSync(tmp); }catch{} }
+          return fs.existsSync(outPath) && fs.statSync(outPath).size > 0;
+        }
+        try{ fs.unlinkSync(tmp); }catch{}
+      }catch{ try{ fs.unlinkSync(tmp); }catch{} /* try next seek point */ }
     }
     return false;
   }catch{ return false; }
+  finally{ releaseThumbSlot(); }
+}
+function makeThumb(videoFull, outPath){
+  // already done? (a concurrent job may have finished while this request waited)
+  if(fs.existsSync(outPath) && fs.statSync(outPath).size > 0) return Promise.resolve(true);
+  // share a single in-flight job between duplicate concurrent requests
+  if(thumbInflight.has(outPath)) return thumbInflight.get(outPath);
+  const p = makeThumbJob(videoFull, outPath).finally(() => thumbInflight.delete(outPath));
+  thumbInflight.set(outPath, p);
+  return p;
 }
 function listVideos(dir){
   try { return fs.readdirSync(dir).filter(f => VIDEO_EXT.includes(path.extname(f).toLowerCase())); }
