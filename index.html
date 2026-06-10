@@ -6,7 +6,12 @@
 <title>REEL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Load the web font WITHOUT blocking first paint: media="print" makes the browser
+     fetch it at low priority and render the page immediately with the system
+     sans-serif fallback; onload flips it live once (if ever) it arrives. On a fully
+     offline hotspot the fetch just fails quietly instead of blanking the screen. -->
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
 <style>
   :root{--accent:#36a3f7;--bg:#0a0d12;--bg-2:#10151c;--card:#161c25;--ink:#f5f8fc;--muted:#8a96a6;--line:rgba(255,255,255,.08)}
   *{box-sizing:border-box;margin:0;padding:0}
