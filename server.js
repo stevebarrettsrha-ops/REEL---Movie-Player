@@ -151,12 +151,19 @@ function findPoster(videoFull, urlPrefix, rel){
   // No image on disk. DON'T run ffmpeg here (that would block startup for every file).
   // Instead hand back a lazy thumbnail URL; the /_thumbs/ route generates the frame
   // on first request and caches it. Encodes the source path so the route can find it.
+  // We ALSO remember it so a background pass can pre-build every thumbnail off-peak,
+  // instead of relying on the browser requesting 20 at once (which timed out under load).
   if(hasFfmpeg()){
     const key = slug(path.basename(videoFull)) || "thumb";
+    const out = path.join(DATA_DIR, "thumbs", key + ".jpg");
+    try{ if(!(fs.existsSync(out) && fs.statSync(out).size > 0)) pendingThumbs.set(out, videoFull); }catch{}
     return "/_thumbs/" + encodeURIComponent(key) + ".jpg?src=" + encodeURIComponent(videoFull);
   }
   return null;
 }
+// Thumbnails still missing on disk -> {outPath: sourceVideo}. Filled in as the
+// library is scanned, drained by the background generator below.
+const pendingThumbs = new Map();
 function thumbPathFor(videoFull){
   const key = slug(path.basename(videoFull)) || "thumb";
   return path.join(DATA_DIR, "thumbs", key + ".jpg");
@@ -177,10 +184,19 @@ function hasFfmpeg(){
 const execFileP = require("util").promisify(require("child_process").execFile);
 function runFfmpeg(args, timeoutMs){
   return new Promise((resolve, reject) => {
-    const cp = require("child_process").spawn("ffmpeg", args, { stdio:"ignore" });
+    // capture stderr so a failed thumbnail/convert tells us WHY (codec, pixel
+    // format, missing stream, ...) instead of silently falling back to a gradient.
+    const cp = require("child_process").spawn("ffmpeg", args, { stdio:["ignore","ignore","pipe"] });
+    let err = "";
+    cp.stderr.on("data", d => { err += d; if(err.length > 4000) err = err.slice(-4000); });
     const to = setTimeout(() => { try{ cp.kill("SIGKILL"); }catch{} reject(new Error("timeout")); }, timeoutMs);
     cp.on("error", e => { clearTimeout(to); reject(e); });
-    cp.on("close", code => { clearTimeout(to); code === 0 ? resolve() : reject(new Error("ffmpeg exit "+code)); });
+    cp.on("close", code => {
+      clearTimeout(to);
+      if(code === 0) return resolve();
+      const tail = err.trim().split("\n").filter(Boolean).pop() || "";
+      reject(new Error("ffmpeg exit "+code+(tail?": "+tail:"")));
+    });
   });
 }
 
@@ -209,6 +225,18 @@ async function audioUnplayable(videoFull){
   if(!c || c==="none") return false;            // unknown / no audio -> don't cry wolf
   return !WEB_AUDIO.includes(c.toLowerCase());
 }
+// How long is the video?  Used to seek to a sensible point for the thumbnail
+// (a frame well into the show, not a black intro) and to avoid seeking PAST the
+// end of a short clip — a common reason extraction produced no frame. 0 = unknown.
+async function probeDuration(videoFull){
+  try{
+    const { stdout } = await execFileP("ffprobe", [
+      "-v","error","-show_entries","format=duration","-of","csv=p=0", videoFull
+    ], { timeout:8000 });
+    const d = parseFloat(String(stdout).trim());
+    return (isFinite(d) && d > 0) ? d : 0;
+  }catch{ return 0; }
+}
 // Thumbnail generation is CPU-heavy (HEVC/H265 decode especially). When a whole
 // episode list opens the browser fires one /_thumbs/ request PER episode at once.
 // Without a limit that spawns 15-20 simultaneous ffmpeg jobs that starve each other,
@@ -231,25 +259,45 @@ function releaseThumbSlot(){
 async function makeThumbJob(videoFull, outPath){
   if(!hasFfmpeg()) return false;
   await acquireThumbSlot();
+  let lastErr = "";
   try{
     fs.mkdirSync(path.dirname(outPath), { recursive:true });
-    // Write to a unique temp file then rename, so a killed/timed-out job can never
-    // leave a partial/zero-byte image behind, and parallel jobs can't clobber output.
+    // Seek to a frame well into the show. Knowing the duration lets us pick a real
+    // point (and never seek past the end of a short clip, which yields no frame).
+    const dur = await probeDuration(videoFull);
+    const pct = dur ? Math.min(dur*0.2, 180) : 0;     // ~20% in, capped at 3 min
+    // Each attempt: a seek time + whether to use ACCURATE (slow, decode-from-start)
+    // seeking. Fast input-seek (-ss before -i) is quick but on files with sparse
+    // keyframes can land on nothing; the accurate pass reliably finds a frame.
+    const attempts = [];
+    if(pct >= 1) attempts.push({ ss: pct, accurate:false });
+    attempts.push({ ss: 30, accurate:false }, { ss: 10, accurate:false },
+                  { ss: 3,  accurate:false }, { ss: 5, accurate:true },
+                  { ss: 0,  accurate:false });
     const tmp = outPath + "." + process.pid + "." + Date.now() + ".tmp.jpg";
-    for(const ss of [12, 4, 1, 0]){     // shorter clips fall through to an earlier frame
+    for(const a of attempts){
+      if(dur && a.ss >= dur) continue;                // don't seek past the end
       try{
-        await runFfmpeg([
-          "-y", "-ss", String(ss), "-i", videoFull, "-an",   // no audio: faster
-          "-frames:v", "1", "-vf", "scale=640:-1", tmp
-        ], 30000);
+        // -map 0:v:0  -> the real video stream (skip embedded cover-art "video" streams)
+        // format=yuvj420p -> guarantees an 8-bit, mjpeg-encodable frame (HDR/10-bit safe)
+        // scale=640:-2   -> 640px wide, even height (some encoders reject odd dimensions)
+        const args = a.accurate
+          ? ["-y", "-i", videoFull, "-ss", String(a.ss)]   // accurate: seek AFTER input
+          : ["-y", "-ss", String(a.ss), "-i", videoFull];  // fast: seek BEFORE input
+        args.push("-map", "0:v:0", "-an", "-sn", "-dn", "-frames:v", "1",
+                  "-vf", "scale=640:-2,format=yuvj420p", "-q:v", "3", tmp);
+        await runFfmpeg(args, 45000);
         if(fs.existsSync(tmp) && fs.statSync(tmp).size > 0){
           try{ fs.renameSync(tmp, outPath); }
           catch{ try{ fs.copyFileSync(tmp, outPath); fs.unlinkSync(tmp); }catch{} }
           return fs.existsSync(outPath) && fs.statSync(outPath).size > 0;
         }
         try{ fs.unlinkSync(tmp); }catch{}
-      }catch{ try{ fs.unlinkSync(tmp); }catch{} /* try next seek point */ }
+      }catch(e){ lastErr = e.message || String(e); try{ fs.unlinkSync(tmp); }catch{} }
     }
+    // Every attempt failed: say so (and why) instead of silently showing a gradient.
+    console.log("  Thumbnail: could not extract a frame from", path.basename(videoFull),
+                lastErr ? "(" + lastErr + ")" : "");
     return false;
   }catch{ return false; }
   finally{ releaseThumbSlot(); }
@@ -262,6 +310,35 @@ function makeThumb(videoFull, outPath){
   const p = makeThumbJob(videoFull, outPath).finally(() => thumbInflight.delete(outPath));
   thumbInflight.set(outPath, p);
   return p;
+}
+// Background pass: quietly build every still-missing thumbnail, gently (one at a
+// time, so it never competes with live streaming or the concurrency-capped
+// on-demand requests). This is why thumbnails now appear even for videos nobody
+// has scrolled to yet — and why a file that timed out under load gets another,
+// unhurried chance. Safe to call repeatedly; it no-ops while already running.
+let pregenRunning = false;
+function pregenerateThumbs(){
+  if(pregenRunning || !hasFfmpeg()) return;
+  const items = [...pendingThumbs.entries()];
+  if(!items.length) return;
+  pregenRunning = true;
+  let i = 0, made = 0;
+  const next = () => {
+    if(i >= items.length){
+      pregenRunning = false;
+      if(made) console.log("  Thumbnails: pre-generated " + made + " picture(s) in the background.");
+      return;
+    }
+    const [out, src] = items[i++];
+    if((fs.existsSync(out) && (()=>{try{return fs.statSync(out).size>0;}catch{return false;}})()) || !fs.existsSync(src)){
+      pendingThumbs.delete(out); return setImmediate(next);
+    }
+    makeThumb(src, out)
+      .then(ok => { if(ok){ made++; pendingThumbs.delete(out); } })
+      .catch(()=>{})
+      .finally(() => setTimeout(next, 50));   // small breather between files
+  };
+  next();
 }
 function listVideos(dir){
   try { return fs.readdirSync(dir).filter(f => VIDEO_EXT.includes(path.extname(f).toLowerCase())); }
@@ -531,8 +608,11 @@ function invalidateLibrary(){ _libCache = null; }
 async function getLibrary(){
   const now = Date.now();
   if(_libCache && (now - _libCacheAt) < LIB_TTL) return _libCache;
-  const lib = await enrich(buildLibrary());
+  const lib = await enrich(buildLibrary());   // also fills pendingThumbs via findPoster
   _libCache = lib; _libCacheAt = now;
+  // Kick the background thumbnail builder a moment later (don't slow this scan, and
+  // don't fight the page load that triggered it).
+  if(pendingThumbs.size) setTimeout(pregenerateThumbs, 3000);
   return lib;
 }
 
@@ -895,9 +975,11 @@ try { const a = readData().profiles.find(p=>p.admin); if(a && verifyPin("3119", 
   console.log("\n  >>> Admin password is still the default (3119). Change it: sign-in screen -> Manage profiles. <<<"); } catch {}
 
 server.listen(PORT, "0.0.0.0", () => {
-  const lib = buildLibrary();
+  const lib = buildLibrary();                 // also fills pendingThumbs via findPoster
   console.log("\n  REEL home server is running.\n");
   printAddresses();
+  // Build any missing thumbnails in the background, starting shortly after boot.
+  if(hasFfmpeg() && pendingThumbs.size) setTimeout(pregenerateThumbs, 4000);
   // If the network changes (WiFi/router drops or comes back), re-print the join
   // address so you never have to restart. Polls frequently and reacts to ANY change.
   let lastIPs = localIPs().join(",");
