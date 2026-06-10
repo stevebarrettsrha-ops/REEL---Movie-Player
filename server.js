@@ -532,6 +532,16 @@ async function kidMediaAllowed(decodedUrl){
   }
   return false;
 }
+// One gate for every route that touches a media file (stream, poster, audiocheck,
+// fixaudio): a kids session may only reach kid-rated media and never the Adult folder;
+// any other session needs the adult password before reaching the Adult folder. Keeping
+// this in one place stops the rules from drifting apart between routes.
+async function mediaAllowed(s, decodedUrl, fp){
+  const underAdult = isUnder(fp, ADULT_DIR);
+  if(s.kids){ if(underAdult) return false; return await kidMediaAllowed(decodedUrl); }
+  if(underAdult && !s.adultUnlocked) return false;
+  return true;
+}
 const SECURITY_QUESTIONS = [
   "What is your mother's maiden name?",
   "Which town were you born in?",
@@ -714,11 +724,15 @@ const server = http.createServer((req, res) => {
   if(url.startsWith("/api/audiocheck")){
     const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
     const src = new URL(req.url,"http://x").searchParams.get("src") || "";
-    const fp = resolveMedia(decodeURIComponent(src));
+    const decoded = decodeURIComponent(src);
+    const fp = resolveMedia(decoded);
     if(!fp || !fs.existsSync(fp)) return sendJSON(res,{ known:false });
-    return audioCodecOf(fp).then(codec => {
-      if(!codec) return sendJSON(res,{ known:false });   // no ffprobe -> can't tell
-      sendJSON(res,{ known:true, codec, playable: codec==="none" || WEB_AUDIO.includes(codec.toLowerCase()) });
+    return mediaAllowed(s, decoded, fp).then(ok => {
+      if(!ok) return sendJSON(res,{ error:"forbidden" },403);
+      return audioCodecOf(fp).then(codec => {
+        if(!codec) return sendJSON(res,{ known:false });   // no ffprobe -> can't tell
+        sendJSON(res,{ known:true, codec, playable: codec==="none" || WEB_AUDIO.includes(codec.toLowerCase()) });
+      });
     });
   }
   // one-click fix: re-encode just the audio to AAC (video is copied, so it's fast), in place
@@ -726,8 +740,10 @@ const server = http.createServer((req, res) => {
     const s=sessionFor(req); if(!s) return sendJSON(res,{ error:"unauthorized" },401);
     if(!hasFfmpeg()) return sendJSON(res,{ error:"ffmpeg not installed" },400);
     return collectBody(req, async body => {
-      const fp = resolveMedia(decodeURIComponent(body.src||""));
+      const decoded = decodeURIComponent(body.src||"");
+      const fp = resolveMedia(decoded);
       if(!fp || !fs.existsSync(fp)) return sendJSON(res,{ error:"no such file" },404);
+      if(!await mediaAllowed(s, decoded, fp)) return sendJSON(res,{ error:"forbidden" },403);
       const dir=path.dirname(fp), ext=path.extname(fp), base=path.basename(fp,ext);
       const tmp=path.join(dir, base+".reel-fixing"+ext);
       try{
@@ -774,13 +790,10 @@ const server = http.createServer((req, res) => {
     if(!s){ res.writeHead(401); return res.end(); }                 // no anonymous direct-URL streaming
     const fp = resolveMedia(url);
     if(!fp){ res.writeHead(403); return res.end(); }
-    const underAdult = isUnder(fp, ADULT_DIR);
-    if(s.kids){                                                     // kids: never adult; otherwise enforce the rating
-      if(underAdult){ res.writeHead(403); return res.end(); }
-      return kidMediaAllowed(url).then(ok => { if(!ok){ res.writeHead(403); return res.end(); } serveFile(req, res, fp); });
-    }
-    if(underAdult && !s.adultUnlocked){ res.writeHead(403); return res.end(); }   // need the adult password first
-    return serveFile(req, res, fp);
+    return mediaAllowed(s, url, fp).then(ok => {
+      if(!ok){ res.writeHead(403); return res.end(); }
+      serveFile(req, res, fp);
+    });
   }
   res.writeHead(404); res.end("Not found");
 });
