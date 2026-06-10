@@ -838,7 +838,12 @@ window.addEventListener("scroll",()=>{preview.classList.remove("show");pvVid.pau
 /* 8) DETAIL MODAL ---------------------------------------------------------- */
 let detailC=null;
 function openDetail(c){
-  detailC=c;hideAllViews();preview.classList.remove("show");
+  // NOTE: the detail modal is a full-screen overlay (position:fixed; inset:0) that
+  // sits ON TOP of whatever view you came from. Do NOT hideAllViews() here — that
+  // tore down the open category/search/filter view and nulled activeFilter, so
+  // closing the modal left a blank page with no videos. Leaving the view mounted
+  // (hidden behind the modal) means closeDetail() returns you right where you were.
+  detailC=c;preview.classList.remove("show");
   $("#dHero").style.background=art(c);$("#dTitle").textContent=c.title;$("#dScore").textContent=c.score+"% match";
   $("#dYear").textContent=c.year;$("#dRating").textContent=c.rating;$("#dRuntime").textContent=c.runtime;
   $("#dDesc").textContent=c.desc;$("#dCast").innerHTML="<b>"+t("Cast")+":</b> "+esc(c.cast)+" &nbsp;·&nbsp; <b>"+t("License")+":</b> "+esc(c.license);
