@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableExtensions
 REM ============================================================
 REM  REEL - STOP your offline WiFi (Windows)
 REM  Just DOUBLE-CLICK this file when you have finished
@@ -23,9 +24,12 @@ echo   REEL - switching the offline WiFi OFF
 echo ============================================================
 echo.
 
-netsh wlan stop hostednetwork
+REM Turn off the classic hosted network (older method)...
+netsh wlan stop hostednetwork >nul 2>&1
 
-echo.
+REM ...and the modern Mobile hotspot (newer method), whichever was on.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0disable-hotspot.ps1" >nul 2>&1
+
 echo ------------------------------------------------------------
 echo   The offline WiFi is now OFF.
 echo   Your computer goes back to normal - it will reconnect to
@@ -33,3 +37,4 @@ echo   your usual WiFi by itself (if one is available).
 echo ------------------------------------------------------------
 echo.
 pause
+endlocal

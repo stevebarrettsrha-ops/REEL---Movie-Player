@@ -24,6 +24,13 @@ number 2 to turn it OFF.
   Nothing to type. The window shows the WiFi name + password and
   the web address to open (usually http://192.168.137.1:8080).
 
+  Newer PCs: many recent laptops no longer support the old
+  WiFi-hosting trick. If so, REEL automatically switches on the
+  modern Windows "Mobile hotspot" instead - and if even that cannot
+  be done for you, the window opens the Mobile hotspot settings page
+  and tells you the ONE switch to flip on (about 10 seconds, no
+  typing). Either way the window stays open with clear instructions.
+
 --------------------------------------------------------------
  MAC
 --------------------------------------------------------------
@@ -69,8 +76,9 @@ The password must be at least 8 characters.
  IS THIS SAFE?
 --------------------------------------------------------------
 Yes. Each script uses only the operating system's OWN built-in
-WiFi-sharing feature (Windows "hosted network", macOS Internet
-Sharing, Linux NetworkManager hotspot). They install nothing, do
+WiFi-sharing feature (Windows "hosted network" or "Mobile hotspot",
+macOS Internet Sharing, Linux NetworkManager hotspot). They install
+nothing, do
 not touch your files, and make no permanent changes - running the
 "2 - STOP" file (or turning sharing off on Mac) puts everything
 back to normal.
