@@ -9,8 +9,9 @@
 *.sh       text eol=lf
 *.command  text eol=lf
 
-# Windows batch launchers want CRLF.
+# Windows batch + PowerShell launchers want CRLF.
 *.bat      text eol=crlf
+*.ps1      text eol=crlf
 
 # Plain LF for the app's own source/data so it serves identically everywhere.
 *.js       text eol=lf
