@@ -254,9 +254,9 @@
   .tile:focus-visible,.genre:focus-visible{outline-offset:-2px}
   input:focus-visible,select:focus-visible{outline:none}
   @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
-  @media(max-width:820px){.dev-toggle{left:auto!important;right:12px;bottom:12px!important;padding:8px 10px!important;font-size:11px!important;opacity:.75}}
-  .dev-toggle{position:fixed;left:24px;bottom:24px;z-index:60;background:var(--card);border:1px solid var(--line);color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:12px;padding:10px 14px;border-radius:10px;cursor:pointer}.dev-toggle:hover{color:var(--ink);border-color:var(--accent)}
-  .dev{position:fixed;right:0;top:0;bottom:0;width:380px;max-width:90vw;z-index:90;background:var(--bg-2);border-left:1px solid var(--line);transform:translateX(100%);transition:transform .3s cubic-bezier(.2,.7,.2,1);overflow-y:auto;padding:24px}.dev.open{transform:none}
+  .dev-scrim{position:fixed;inset:0;z-index:89;background:rgba(5,7,10,.55);display:none}.dev-scrim.open{display:block}
+  .dev details{margin-top:26px;border-top:1px solid var(--line);padding-top:14px}.dev summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:700}.dev summary:hover{color:var(--ink)}
+  .dev{visibility:hidden;position:fixed;right:0;top:0;bottom:0;width:380px;max-width:90vw;z-index:90;background:var(--bg-2);border-left:1px solid var(--line);transform:translateX(100%);transition:transform .3s cubic-bezier(.2,.7,.2,1);overflow-y:auto;padding:24px}.dev.open{transform:none;visibility:visible}
   .dev-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.dev-head h3{font-size:18px;font-weight:800}.dev-head button{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer}
   .dev .sec{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:22px 0 12px}
   .swatches{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
@@ -435,6 +435,7 @@
     <div class="profile-menu" id="profileMenu">
       <div class="pm-head"><div class="pm-av" id="pmAv"></div><div><div class="pm-name" id="pmName"></div><div class="pm-sub" id="pmSub">Profile</div></div></div>
       <button class="pm-item" id="pmList"><svg viewBox="0 0 24 24"><path d="M4 6h11v2H4zm0 5h11v2H4zm0 5h7v2H4zm15-7 4 4-1.4 1.4L19 14.8V21h-2v-6.2l-1.6 1.6L14 15z"/></svg> <span id="pmListT">My List</span></button>
+      <button class="pm-item" id="pmSettings"><svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.4 7.4 0 000-1.88l2.03-1.58a.5.5 0 00.12-.61l-1.92-3.32a.5.5 0 00-.59-.22l-2.39.96a7 7 0 00-1.62-.94l-.36-2.54a.5.5 0 00-.48-.41h-3.84a.5.5 0 00-.47.41l-.36 2.54a7 7 0 00-1.62.94l-2.39-.96a.5.5 0 00-.59.22L2.74 8.87a.5.5 0 00.12.61l2.03 1.58a7.4 7.4 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7 7 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 00-.12-.61zM12 15.6a3.6 3.6 0 110-7.2 3.6 3.6 0 010 7.2z"/></svg> <span id="pmSettingsT">Settings</span></button>
       <button class="pm-item" id="pmSwitch"><svg viewBox="0 0 24 24"><path d="M16 17v-3H9v-4h7V7l5 5zM4 5h8V3H4a2 2 0 00-2 2v14a2 2 0 002 2h8v-2H4z"/></svg> <span id="pmSwitchT">Switch profile</span></button>
     </div>
   </div>
@@ -547,18 +548,20 @@
 </footer>
 
 <!-- DEV DRAWER -->
-<button class="dev-toggle" id="devToggle">{ } Developer</button>
+<div class="dev-scrim" id="devScrim"></div>
 <aside class="dev" id="dev">
-  <div class="dev-head"><h3>Under the hood</h3><button id="devClose">×</button></div>
-  <div class="sec">Accent · ?color=</div><div class="swatches" id="swatches"></div>
-  <div class="sec">Behavior</div>
+  <div class="dev-head"><h3 id="setH">Settings</h3><button id="devClose" title="Close">×</button></div>
+  <div class="sec">Accent colour</div><div class="swatches" id="swatches"></div>
+  <div class="sec">Playback</div>
   <div class="drow"><span>Autoplay on open</span><div class="tg" id="tAuto"></div></div>
   <div class="drow"><span>Auto-advance next</span><div class="tg on" id="tNext"></div></div>
   <div class="drow"><span>Remember progress</span><div class="tg on" id="tSave"></div></div>
   <div class="drow"><span>Hero preview audio</span><div class="tg" id="tHeroAudio"></div></div>
   <div class="drow"><span>Lite mode (faster on TV)</span><div class="tg" id="tLite"></div></div>
+  <details><summary>Advanced (for developers)</summary>
   <div class="sec">Equivalent embed URL</div><div class="code" id="embedUrl"></div>
   <div class="sec">Player events · postMessage</div><div class="log" id="log"></div>
+  </details>
 </aside>
 
 <script>
@@ -632,7 +635,7 @@ const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 const LANGS=[["en","English"],["es","Español"],["fr","Français"]];
 const I18N={
   es:{ "Home":"Inicio","Movies":"Películas","TV shows":"Series","Categories":"Categorías","Search":"Buscar",
-    "Play":"Reproducir","Resume":"Reanudar","More info":"Más información","My List":"Mi lista","Switch profile":"Cambiar perfil",
+    "Play":"Reproducir","Resume":"Reanudar","More info":"Más información","My List":"Mi lista","Settings":"Ajustes","Switch profile":"Cambiar perfil",
     "Genres":"Géneros","Continue Watching":"Seguir viendo","Top 10 Today":"Top 10 de hoy","Sci-Fi & Fantasy":"Ciencia ficción y fantasía",
     "Kids & Family":"Niños y familia","Drama":"Drama","Who's watching?":"¿Quién está viendo?","Create a profile":"Crear un perfil",
     "Add profile":"Añadir perfil","Manage profiles":"Gestionar perfiles","Exit admin":"Salir de administrador","More like this":"Títulos similares",
@@ -641,7 +644,7 @@ const I18N={
     "Action and adventure":"Acción y aventura","Anime":"Anime","Comedy":"Comedia","Documentary":"Documental","Fantasy":"Fantasía",
     "Horror":"Terror","Kids":"Niños","Mystery and thrillers":"Misterio y suspense","Romance":"Romance","Science fiction":"Ciencia ficción","Short Films":"Cortometrajes","Music Videos":"Videos musicales","Young adult":"Jóvenes adultos" },
   fr:{ "Home":"Accueil","Movies":"Films","TV shows":"Séries","Categories":"Catégories","Search":"Rechercher",
-    "Play":"Lire","Resume":"Reprendre","More info":"Plus d'infos","My List":"Ma liste","Switch profile":"Changer de profil",
+    "Play":"Lire","Resume":"Reprendre","More info":"Plus d'infos","My List":"Ma liste","Settings":"Paramètres","Switch profile":"Changer de profil",
     "Genres":"Genres","Continue Watching":"Reprendre","Top 10 Today":"Top 10 du jour","Sci-Fi & Fantasy":"SF & Fantastique",
     "Kids & Family":"Enfants & Famille","Drama":"Drame","Who's watching?":"Qui regarde ?","Create a profile":"Créer un profil",
     "Add profile":"Ajouter un profil","Manage profiles":"Gérer les profils","Exit admin":"Quitter admin","More like this":"Titres similaires",
@@ -659,7 +662,7 @@ function applyLang(){
   const nc=$("#navCats"); if(nc) nc.textContent=t("Categories");
   $("#searchInput").placeholder=t("Search");
   $("#heroPlayT").textContent=t("Play"); $("#heroInfo").title=t("More info");
-  $("#pmListT").textContent=t("My List"); $("#pmSwitchT").textContent=t("Switch profile");
+  $("#pmListT").textContent=t("My List"); $("#pmSwitchT").textContent=t("Switch profile"); $("#pmSettingsT").textContent=$("#setH").textContent=t("Settings");
   $("#catsH").textContent=t("Categories"); $("#catsSub").textContent=t("Genres");
   $("#dMoreH").textContent=t("More like this");
   renderGenres();
@@ -1211,7 +1214,8 @@ function renderGenres(){const g=$("#genreGrid");g.innerHTML="";GENRES.forEach(na
   el.innerHTML=`<span>${t(name)}</span>`;el.onclick=()=>filterRows(c=>c.genres.includes(name),t(name));g.appendChild(el);});}
 
 /* 11) DEV DRAWER ----------------------------------------------------------- */
-$("#devToggle").onclick=()=>$("#dev").classList.add("open");$("#devClose").onclick=()=>$("#dev").classList.remove("open");
+function setDev(on){$("#dev").classList.toggle("open",on);$("#devScrim").classList.toggle("open",on);if(on)setTimeout(()=>$("#devClose").focus(),60);}
+$("#pmSettings").onclick=()=>{$("#profileMenu").classList.remove("open");setDev(true);};$("#devClose").onclick=$("#devScrim").onclick=()=>setDev(false);
 const PALETTE=["#36a3f7","#e50914","#1db954","#f0a833","#9146ff","#ff5c8a","#00d4c8"];const sw=$("#swatches");
 PALETTE.forEach(c=>{const b=document.createElement("div");b.className="sw";b.dataset.c=c;b.style.background=c;b.onclick=()=>setAccent(c);sw.appendChild(b);});
 const picker=document.createElement("input");picker.type="color";picker.value=accent;picker.oninput=e=>setAccent(e.target.value);sw.appendChild(picker);
@@ -1230,7 +1234,7 @@ bindTg($("#tHeroAudio"),()=>heroAudio,v=>heroAudio=v,()=>{heroMuted=!heroAudio;h
     location.reload();
   };
 })();
-function buildEmbed(){const c=current||byId("steel");const id=currentEp?`${c.id}/${currentEp.ep}`:c.id;const p=["color="+accent.replace("#","")];
+function buildEmbed(){const c=current||byId("steel")||CATALOG[0];if(!c){$("#embedUrl").textContent="";return;}const id=currentEp?`${c.id}/${currentEp.ep}`:c.id;const p=["color="+accent.replace("#","")];
   if(autoPlay)p.push("autoPlay=true");if(autoNext)p.push("nextEpisode=true");const t=c.type==="series"?"tv":"movie";
   $("#embedUrl").innerHTML=`&lt;iframe src="<b>https://yoursite.com/embed/${t}/${id}?${p.join("&")}</b>"<br>&nbsp;&nbsp;width="100%" height="600" allowfullscreen&gt;&lt;/iframe&gt;`;}
 
@@ -1457,6 +1461,7 @@ setAccent(accent); renderGenres(); initProfiles();
     if($("#player").classList.contains("open")) return null;
     for(const s of ["#addForm","#pinForm","#recoverForm","#adminForm","#aeForm"]){ const e=$(s); if(e&&e.classList.contains("open")) return e; }
     for(const s of [".navmenu",".lang-menu"]){ const e=document.querySelector(s+".open"); if(e) return e; }
+    if($("#dev").classList.contains("open")) return $("#dev");
     if($("#detail").classList.contains("open")) return $("#detail");
     if($("#gate").classList.contains("open")) return $("#gate");
     return document.body;
@@ -1497,6 +1502,7 @@ setAccent(accent); renderGenres(); initProfiles();
   function arm(){ if(armed) return; armed=true; document.body.classList.add("tvnav"); }
   function back(){
     if($("#player").classList.contains("open")) return false;   // player owns Back when open
+    if($("#dev").classList.contains("open")){ setDev(false); return true; }
     if($("#detail").classList.contains("open")){ closeDetail(); return true; }
     const open=document.querySelector(".navmenu.open,.lang-menu.open,#addForm.open,#pinForm.open,#recoverForm.open,#adminForm.open,#aeForm.open");
     if(open){ open.classList.remove("open"); return true; }
