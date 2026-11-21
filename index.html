@@ -93,9 +93,22 @@
   .row-head .more{font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:3px;opacity:0;transition:.2s}
   .row:hover .row-head .more{opacity:1}.row-head .more:hover{color:var(--accent)}.row-head .more svg{width:14px;height:14px;fill:currentColor}
   @media(max-width:820px){.row-head{padding:0 16px}.row-head h2{font-size:18px}.row-head .more{opacity:1}}
-  .track{display:flex;gap:14px;overflow-x:auto;padding:8px 40px 26px;scroll-snap-type:x mandatory;scrollbar-width:none}
-  @media(max-width:820px){.track{padding:8px 16px 22px}}
+  .track{display:flex;gap:14px;overflow-x:auto;padding:8px 40px 26px;scroll-snap-type:x mandatory;scroll-padding:0 40px;scrollbar-width:none}
+  @media(max-width:820px){.track{padding:8px 16px 22px;scroll-padding:0 16px}}
   .track::-webkit-scrollbar{display:none}
+  .track-wrap{position:relative}
+  .row-arrow{display:none;position:absolute;top:8px;bottom:26px;width:40px;z-index:4;border:none;cursor:pointer;color:#fff;background:rgba(5,7,10,.72);align-items:center;justify-content:center;opacity:0;transition:opacity .2s}
+  .row-arrow.prev{left:0;border-radius:0 10px 10px 0}.row-arrow.next{right:0;border-radius:10px 0 0 10px}
+  .row-arrow svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .row-arrow:hover{background:rgba(5,7,10,.92)}
+  @media(hover:hover) and (pointer:fine){.row-arrow.can{display:flex}.row:hover .row-arrow.can{opacity:1}}
+  .lib-note{margin:44px 40px 0;padding:14px 18px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;background:var(--card);color:var(--muted);font-size:14px;line-height:1.5}.lib-note b{color:var(--ink)}
+  @media(max-width:820px){.lib-note{margin:40px 16px 0}}
+  .nolib #heroSection{display:none!important}
+  .nolib .rows{margin-top:0}
+  .nolib-msg{max-width:560px;margin:0 auto;padding:22vh 24px 60px;text-align:center}
+  .nolib-msg h2{font-size:28px;font-weight:900;letter-spacing:-.02em;margin-bottom:12px}
+  .nolib-msg p{color:var(--muted);font-size:15.5px;line-height:1.6}.nolib-msg b{color:var(--ink)}
   .tile{position:relative;flex:0 0 300px;scroll-snap-align:start;cursor:pointer;border-radius:12px;overflow:hidden;background:var(--card);border:1px solid var(--line);transition:border-color .2s}
   @media(max-width:820px){.tile{flex-basis:248px}}
   .tile:hover{border-color:rgba(255,255,255,.16)}
@@ -447,7 +460,7 @@
   <div class="hero-c hero-key" id="heroKey">
     <div class="kicker" id="heroKicker">Featured</div>
     <h1 id="heroTitle">—</h1>
-    <div class="meta"><span class="chip">HD</span><span class="chip" id="heroRating">PG</span><span class="dot"></span><span id="heroYear"></span><span class="dot"></span><span id="heroGenres"></span></div>
+    <div class="meta"><span class="chip" id="heroRating">PG</span><span class="dot"></span><span id="heroYear"></span><span class="dot"></span><span id="heroGenres"></span></div>
     <p id="heroDesc"></p>
     <div class="btns">
       <button class="btn btn-play" id="heroPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> <span id="heroPlayT">Play</span></button>
@@ -456,7 +469,7 @@
     </div>
   </div>
   <button class="circ hero-mute" id="heroMute" title="Toggle sound"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13 3 3 3 1-1-3-3 3-3-1-1-3 3-3-3-1 1 3 3-3 3 1 1z"/></svg></button>
-  <div class="hero-age"><span>Terms apply</span><span class="chip" id="heroAge">16+</span></div>
+  <div class="hero-age"><span class="chip" id="heroAge"></span></div>
   <div class="hero-dots" id="heroDots"></div>
 </section>
 
@@ -489,7 +502,7 @@
   <div class="d-card">
     <div class="d-hero" id="dHero"><button class="d-close" id="dClose">×</button><div class="d-htext"><h1 id="dTitle"></h1></div></div>
     <div class="d-body">
-      <div class="d-meta"><span class="score" id="dScore"></span><span id="dYear"></span><span class="dot"></span><span class="chip" id="dRating"></span><span class="dot"></span><span id="dRuntime"></span></div>
+      <div class="d-meta"><span id="dYear"></span><span class="dot"></span><span class="chip" id="dRating"></span><span class="dot"></span><span id="dRuntime"></span></div>
       <div class="d-btns"><button class="btn btn-play" id="dPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> <span id="dPlayLabel">Play</span></button><button class="icon-btn" id="dList" title="My List"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg></button></div>
       <p class="d-desc" id="dDesc"></p><p class="d-cast" id="dCast"></p>
       <div id="dEpisodes"></div>
@@ -636,7 +649,7 @@ const LANGS=[["en","English"],["es","Español"],["fr","Français"]];
 const I18N={
   es:{ "Home":"Inicio","Movies":"Películas","TV shows":"Series","Categories":"Categorías","Search":"Buscar",
     "Play":"Reproducir","Resume":"Reanudar","More info":"Más información","My List":"Mi lista","Settings":"Ajustes","Switch profile":"Cambiar perfil",
-    "Genres":"Géneros","Continue Watching":"Seguir viendo","Top 10 Today":"Top 10 de hoy","Sci-Fi & Fantasy":"Ciencia ficción y fantasía",
+    "Genres":"Géneros","Continue Watching":"Seguir viendo","Top 10 Today":"Top 10 de hoy","Recently Added":"Añadido recientemente","Sci-Fi & Fantasy":"Ciencia ficción y fantasía",
     "Kids & Family":"Niños y familia","Drama":"Drama","Who's watching?":"¿Quién está viendo?","Create a profile":"Crear un perfil",
     "Add profile":"Añadir perfil","Manage profiles":"Gestionar perfiles","Exit admin":"Salir de administrador","More like this":"Títulos similares",
     "Cast":"Reparto","License":"Licencia","Episodes":"Episodios","Up Next":"A continuación","Next Episode":"Próximo episodio",
@@ -645,7 +658,7 @@ const I18N={
     "Horror":"Terror","Kids":"Niños","Mystery and thrillers":"Misterio y suspense","Romance":"Romance","Science fiction":"Ciencia ficción","Short Films":"Cortometrajes","Music Videos":"Videos musicales","Young adult":"Jóvenes adultos" },
   fr:{ "Home":"Accueil","Movies":"Films","TV shows":"Séries","Categories":"Catégories","Search":"Rechercher",
     "Play":"Lire","Resume":"Reprendre","More info":"Plus d'infos","My List":"Ma liste","Settings":"Paramètres","Switch profile":"Changer de profil",
-    "Genres":"Genres","Continue Watching":"Reprendre","Top 10 Today":"Top 10 du jour","Sci-Fi & Fantasy":"SF & Fantastique",
+    "Genres":"Genres","Continue Watching":"Reprendre","Top 10 Today":"Top 10 du jour","Recently Added":"Ajouts récents","Sci-Fi & Fantasy":"SF & Fantastique",
     "Kids & Family":"Enfants & Famille","Drama":"Drame","Who's watching?":"Qui regarde ?","Create a profile":"Créer un profil",
     "Add profile":"Ajouter un profil","Manage profiles":"Gérer les profils","Exit admin":"Quitter admin","More like this":"Titres similaires",
     "Cast":"Distribution","License":"Licence","Episodes":"Épisodes","Up Next":"À suivre","Next Episode":"Épisode suivant",
@@ -805,20 +818,33 @@ function rowEl(title,items,ranked){
   row.appendChild(head);
   const tr=document.createElement("div");tr.className="track"+(ranked?" top":"");
   items.forEach((c,i)=>{if(ranked){const w=document.createElement("div");w.className="rank";const n=document.createElement("div");n.className="num";n.textContent=i+1;w.appendChild(n);w.appendChild(tile(c));tr.appendChild(w);}else tr.appendChild(tile(c));});
-  row.appendChild(tr);return row;
+  const tw=document.createElement("div");tw.className="track-wrap";tw.appendChild(tr);
+  const mk=(dir)=>{const b=document.createElement("button");b.className="row-arrow "+(dir<0?"prev":"next");b.tabIndex=-1;b.setAttribute("aria-label",dir<0?"Scroll left":"Scroll right");
+    b.innerHTML='<svg viewBox="0 0 24 24"><path d="'+(dir<0?"M15 6l-6 6 6 6":"M9 6l6 6-6 6")+'"/></svg>';
+    b.onclick=e=>{e.stopPropagation();tr.scrollBy({left:dir*Math.max(300,tr.clientWidth*.8),behavior:"smooth"});};tw.appendChild(b);return b;};
+  const pb=mk(-1),nb=mk(1);
+  const upd=()=>{pb.classList.toggle("can",tr.scrollLeft>4);nb.classList.toggle("can",tr.scrollLeft+tr.clientWidth<tr.scrollWidth-4);};
+  tr.addEventListener("scroll",upd,{passive:true});row.addEventListener("mouseenter",upd);
+  row.appendChild(tw);return row;
 }
 function renderRows(){
   const wrap=$("#rows");wrap.innerHTML="";
   const C=vis();
+  // 6) nothing to show: explain where files go instead of a blank page
+  document.body.classList.toggle("nolib",!C.length);
+  if(!C.length){ wrap.innerHTML='<div class="nolib-msg"><h2>'+(KIDS&&CATALOG.length?"No kid-friendly titles yet":"Your library is empty")+'</h2><p>'+
+    (KIDS&&CATALOG.length?"Put videos in the <b>Kids</b> folder, or give a title a G or PG rating, and they will show up here.":"Put video files in the <b>movies</b> folder (or <b>series</b>, <b>Kids</b>, <b>Documentaries</b>, <b>Short Films</b>, <b>Music Videos</b>) next to the REEL server, then refresh this page.")+'</p></div>'; return; }
   const cont=C.filter(c=>{const r=resume(c);return r.started&&!r.done;});
   const list=store.get("watchlist").map(byId).filter(c=>c&&C.includes(c));
+  if(SAMPLES){ const n=document.createElement("div");n.className="lib-note";n.innerHTML="<b>Your library is empty</b> — these are sample films. Put your own videos in the <b>movies</b> or <b>series</b> folder next to the REEL server, then refresh.";wrap.appendChild(n); }
   const add=(t,items,r)=>{const e=rowEl(t,items,r);if(e)wrap.appendChild(e);};
   add(t("Continue Watching"),cont);
   add(t("My List"),list);
-  add(t("Top 10 Today"),[...C].sort((a,b)=>b.score-a.score).slice(0,10),true);
-  add(t("Sci-Fi & Fantasy"),C.filter(c=>c.genres.some(g=>["Science fiction","Fantasy","Action and adventure"].includes(g))));
-  add(t("Kids & Family"),C.filter(c=>c.genres.some(g=>["Kids","Comedy"].includes(g))));
-  add(t("Drama"),C.filter(c=>c.genres.includes("Drama")));
+  add(t("Recently Added"),C.filter(c=>c.badge&&/recent/i.test(c.badge)&&!c.adult));
+  const notAdult=c=>!(c.adult||c.category==="Adult");
+  const seen=new Set(), names=[...GENRES];
+  C.forEach(c=>(c.genres||[]).forEach(g=>{if(!names.includes(g))names.push(g);}));
+  names.forEach(g=>{ if(g==="Adult"||seen.has(g))return; seen.add(g); add(t(g),C.filter(c=>notAdult(c)&&(c.genres||[]).includes(g))); });
   if(ADULT_UNLOCKED) add("Adult (18+)",C.filter(c=>c.adult||c.category==="Adult"));
 }
 
@@ -859,7 +885,7 @@ function openDetail(c){
   // closing the modal left a blank page with no videos. Leaving the view mounted
   // (hidden behind the modal) means closeDetail() returns you right where you were.
   detailC=c;preview.classList.remove("show");
-  $("#dHero").style.background=art(c);$("#dTitle").textContent=c.title;$("#dScore").textContent=c.score+"% match";
+  $("#dHero").style.background=art(c);$("#dTitle").textContent=c.title;
   $("#dYear").textContent=c.year;$("#dRating").textContent=c.rating;$("#dRuntime").textContent=c.runtime;
   $("#dDesc").textContent=c.desc;$("#dCast").innerHTML=[[t("Cast"),c.cast],[t("License"),c.license]].filter(x=>x[1]).map(x=>"<b>"+x[0]+":</b> "+esc(x[1])).join(" &nbsp;·&nbsp; ");
   $("#dDesc").style.display=c.desc?"":"none";
@@ -1153,7 +1179,7 @@ function doSearch(q){q=q.trim().toLowerCase();if(!q){showHome();return;}
   hideAllViews();$("#rows").style.display="none";$("#heroSection").style.display="none";heroVid.pause();
   $("#results").classList.add("on");$("#resultsH").textContent=`Results for “${q}”`;const g=$("#resultsGrid");g.innerHTML="";
   const hits=vis().filter(c=>c.title.toLowerCase().includes(q)||c.genres.join(" ").toLowerCase().includes(q)||(c.type==="series"&&eps(c).some(e=>(e.title||"").toLowerCase().includes(q))));
-  if(!hits.length){ g.innerHTML='<div class="empty">No titles match. Try “sci-fi”, “sintel”, or an episode name.</div>'; return; }
+  if(!hits.length){ g.innerHTML='<div class="empty">No titles match. Try a different title, a genre, or an episode name.</div>'; return; }
   hits.forEach(c=>{
     const t=tile(c);
     if(c.type==="series" && !c.title.toLowerCase().includes(q)){
@@ -1337,7 +1363,8 @@ async function authAndEnter(p, pin){
   }
 }
 async function loadCatalog(){ if(!SERVER_OK) return;
-  try{ const lib=await api("/api/catalog?token="+encodeURIComponent(TOKEN)); if(Array.isArray(lib)&&lib.length) CATALOG=lib; }catch{} }
+  try{ const lib=await api("/api/catalog?token="+encodeURIComponent(TOKEN)); if(Array.isArray(lib)&&lib.length){ CATALOG=lib; SAMPLES=false; } else if(Array.isArray(lib)) SAMPLES=true; }catch{} }
+var SAMPLES=false;   // true = the server found no videos, so the built-in sample films are showing
 async function loadState(){
   if(SERVER_OK){ try{ STATE=await api("/api/state/"+PROFILE.id+"?token="+encodeURIComponent(TOKEN)); }catch{ STATE={watchlist:[],kv:{}}; } }
   else STATE=lsGet("state:"+PROFILE.id)||{watchlist:[],kv:{}};
