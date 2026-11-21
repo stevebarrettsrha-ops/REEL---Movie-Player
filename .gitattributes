@@ -16,6 +16,7 @@
 # Plain LF for the app's own source/data so it serves identically everywhere.
 *.js       text eol=lf
 *.html     text eol=lf
+*.css      text eol=lf
 *.json     text eol=lf
 *.vtt      text eol=lf
 
