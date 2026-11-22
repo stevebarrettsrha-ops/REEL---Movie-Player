@@ -49,6 +49,7 @@ FOLDER LAYOUT
   fix-sound-linux.sh     <- convert un-playable files -> MP4 (Linux)
   server.js            <- the program that runs the server
   reel-prime.html      <- the app/page it serves  (keep this name)
+  app\                 <- the page's styles + script (keep next to the page)
   README.txt           <- full setup, profiles, PINs, admin, TMDB art
   movies\              <- DROP YOUR MOVIES HERE
   series\              <- DROP YOUR TV SHOWS HERE (one folder per show)

@@ -22,9 +22,10 @@ STEP 1 — Install Node.js (one time)
 STEP 2 — Set up the folder
 --------------------------------------------------------------
 1. Make a folder, e.g.  C:\REEL
-2. Put these two files inside it:
+2. Put these inside it:
        server.js
        reel-prime.html
+       app\            (a folder: reel.css + reel.js — the page's look and logic)
 3. The server will create two folders next to them on first run:
        C:\REEL\movies
        C:\REEL\series
@@ -35,6 +36,7 @@ Your folder ends up looking like:
    C:\REEL\
        server.js
        reel-prime.html
+       app\
        movies\
        series\
 

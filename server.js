@@ -5,7 +5,7 @@
      1. Scans a /movies folder and a /series folder on your PC.
      2. Builds REEL's catalog automatically from the files it finds.
      3. Serves your videos with HTTP "range" support so seeking/scrubbing works.
-     4. Serves the REEL front-end (reel-prime.html) with that catalog injected.
+     4. Serves the REEL front-end (reel-prime.html + the app/ folder) and its catalog.
 
    It uses ONLY Node's built-in modules. No "npm install", nothing to download
    beyond Node itself. See README.txt for the full Windows setup.
@@ -40,6 +40,7 @@ const EXTRA_DIRS = [
 ];
 // the front-end may be named reel-prime.html (shipped) or index.html (repo) — use whichever exists
 const FRONTEND   = ["reel-prime.html","index.html"].map(f=>path.join(ROOT,f)).find(f=>{ try{return fs.existsSync(f);}catch{return false;} }) || path.join(ROOT,"reel-prime.html");
+const APP_DIR    = path.join(ROOT, "app");            // the front-end's stylesheet + script
 const DATA_DIR   = path.join(ROOT, "data");           // saved data lives here
 const DATA_FILE  = path.join(DATA_DIR, "profiles.json");   // profiles + hashed PINs/answers + per-profile history
 
@@ -711,6 +712,13 @@ const server = http.createServer((req, res) => {
   const url = decodeURIComponent(req.url.split("?")[0]);
 
   if(url === "/" || url === "/index.html"){ return serveFile(req, res, FRONTEND); }
+  // the page's own stylesheet + script live in the app/ folder next to it (only .css/.js, no sub-folders)
+  if(url.startsWith("/app/")){
+    const name = path.basename(url);
+    if(url !== "/app/"+name || ![".css",".js"].includes(path.extname(name).toLowerCase())){ res.writeHead(404); return res.end("Not found"); }
+    res.setHeader("Cache-Control","no-cache");               // always pick up a new version after an update
+    return serveFile(req, res, path.join(APP_DIR, name));
+  }
 
   // ---- auth: exchange (profile id + PIN) for a session token ----
   if(url === "/api/auth" && req.method === "POST"){
